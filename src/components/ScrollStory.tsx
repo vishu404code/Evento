@@ -92,11 +92,11 @@ export const ScrollStory: React.FC = () => {
 
     const unsubscribe = scrollYProgress.on('change', (latest) => {
       let nextStep = 0;
-      if (latest >= 0.75) {
+      if (latest >= 0.68) {
         nextStep = 3;
-      } else if (latest >= 0.5) {
+      } else if (latest >= 0.42) {
         nextStep = 2;
-      } else if (latest >= 0.25) {
+      } else if (latest >= 0.16) {
         nextStep = 1;
       } else {
         nextStep = 0;
@@ -174,7 +174,8 @@ export const ScrollStory: React.FC = () => {
     if (containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       const scrollableDist = rect.height - window.innerHeight;
-      const targetProgress = (idx + 0.5) / 4;
+      const stageProgressMap = [0.06, 0.28, 0.54, 0.82];
+      const targetProgress = stageProgressMap[idx];
       const targetY = window.scrollY + rect.top + targetProgress * scrollableDist;
       window.scrollTo({ top: targetY, behavior: 'smooth' });
     }
@@ -211,7 +212,7 @@ export const ScrollStory: React.FC = () => {
       id="story"
       className="relative bg-beige-sand/60 border-t border-beige-dark/50 scroll-mt-24 sm:scroll-mt-28"
       style={{
-        height: !isMobile && !shouldReduceMotion ? '400vh' : 'auto',
+        height: !isMobile && !shouldReduceMotion ? '260vh' : 'auto',
       }}
     >
       {/* Sticky Pinned Container for Desktop, standard flow for mobile/reduced motion */}
