@@ -96,19 +96,19 @@ export const ScrollStory: React.FC = () => {
           trigger: containerRef.current,
           pin: true,
           start: 'top top',
-          end: '+=950', // Concise scroll distance: eliminates heavy effort during slow scrolling
-          scrub: 0.5, // 0.5s smooth interpolation for trackpad and cursor
+          end: '+=580', // Concise 580px distance: effortless progression without fatigue during slow scrolling
+          scrub: 0.25, // 0.25s snappy scrub: instantaneous response without muddy drag or delay
           anticipatePin: 1,
           onUpdate: (self) => {
             const p = self.progress;
-            // Transitions start earlier with hysteresis to prevent getting stuck during slow scrolling
+            // Transitions start earlier (Step 1 at ~46px) with tight hysteresis so slow scrolling never sticks
             setActiveStep((prev) => {
-              if (prev === 0 && p >= 0.12) return 1;
-              if (prev === 1 && p <= 0.08) return 0;
-              if (prev === 1 && p >= 0.42) return 2;
-              if (prev === 2 && p <= 0.38) return 1;
-              if (prev === 2 && p >= 0.72) return 3;
-              if (prev === 3 && p <= 0.68) return 2;
+              if (prev === 0 && p >= 0.08) return 1;
+              if (prev === 1 && p <= 0.04) return 0;
+              if (prev === 1 && p >= 0.38) return 2;
+              if (prev === 2 && p <= 0.34) return 1;
+              if (prev === 2 && p >= 0.68) return 3;
+              if (prev === 3 && p <= 0.64) return 2;
               return prev;
             });
           },
@@ -213,7 +213,7 @@ export const ScrollStory: React.FC = () => {
 
     const st = scrollTriggerRef.current;
     if (st) {
-      const stageProgressMap = [0.04, 0.26, 0.56, 0.86];
+      const stageProgressMap = [0.03, 0.22, 0.52, 0.84];
       const targetScroll = st.start + stageProgressMap[idx] * (st.end - st.start);
       window.scrollTo({ top: targetScroll, behavior: 'smooth' });
     }
@@ -372,7 +372,7 @@ export const ScrollStory: React.FC = () => {
                       <div className="flex-1 overflow-hidden relative">
                         {/* Stage 01: Home Timeline Feed */}
                         <div
-                          className={`absolute inset-0 flex flex-col space-y-2.5 pt-1 transition-all duration-300 ease-out will-change-[transform,opacity] ${
+                          className={`absolute inset-0 flex flex-col space-y-2.5 pt-1 transition-all duration-200 ease-out will-change-[transform,opacity] ${
                             activeStep === 0
                               ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto z-10'
                               : activeStep > 0
@@ -444,7 +444,7 @@ export const ScrollStory: React.FC = () => {
 
                         {/* Stage 02: Month Calendar View */}
                         <div
-                          className={`absolute inset-0 flex flex-col space-y-2 pt-1 transition-all duration-300 ease-out will-change-[transform,opacity] ${
+                          className={`absolute inset-0 flex flex-col space-y-2 pt-1 transition-all duration-200 ease-out will-change-[transform,opacity] ${
                             activeStep === 1
                               ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto z-10'
                               : activeStep > 1
@@ -552,7 +552,7 @@ export const ScrollStory: React.FC = () => {
 
                         {/* Stage 03: Event Details View */}
                         <div
-                          className={`absolute inset-0 flex flex-col space-y-2.5 pt-1 transition-all duration-300 ease-out will-change-[transform,opacity] ${
+                          className={`absolute inset-0 flex flex-col space-y-2.5 pt-1 transition-all duration-200 ease-out will-change-[transform,opacity] ${
                             activeStep === 2
                               ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto z-10'
                               : activeStep > 2
@@ -615,7 +615,7 @@ export const ScrollStory: React.FC = () => {
 
                         {/* Stage 04: Animated Finger Tap, Ringing Bell, Confetti, and Reminder Set */}
                         <div
-                          className={`absolute inset-0 flex flex-col space-y-3 pt-4 text-center relative transition-all duration-300 ease-out will-change-[transform,opacity] ${
+                          className={`absolute inset-0 flex flex-col space-y-3 pt-4 text-center relative transition-all duration-200 ease-out will-change-[transform,opacity] ${
                             activeStep === 3
                               ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto z-10'
                               : 'opacity-0 translate-y-3 scale-[0.98] pointer-events-none z-0'
