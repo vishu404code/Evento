@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence, useScroll, useReducedMotion } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { Calendar, Bell, Check, MapPin, Clock, Search, ShieldCheck } from 'lucide-react';
 import { triggerConfetti } from '../utils/confetti';
+
+gsap.registerPlugin(ScrollTrigger);
 
 interface StoryStep {
   step: number;
@@ -41,6 +45,8 @@ export const ScrollStory: React.FC = () => {
   const [activeStep, setActiveStep] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const phone3DRef = useRef<HTMLDivElement>(null);
+  const scrollTriggerRef = useRef<ScrollTrigger | null>(null);
   const stepCardRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   // Stage 4 notification interactive states
@@ -80,32 +86,66 @@ export const ScrollStory: React.FC = () => {
     return `${h}h ${m < 10 ? '0' : ''}${m}m ${s < 10 ? '0' : ''}${s}s`;
   };
 
-  // Scroll Progress (0 to 1) for pinned 400vh desktop section
-  const { scrollYProgress } = useScroll({
-    target: containerRef,
-    offset: ['start start', 'end end'],
-  });
-
-  // Map scroll progress seamlessly to active step on desktop
+  // GSAP ScrollTrigger on desktop: responsive, smooth scrubbing, starting earlier without sticking
   useEffect(() => {
-    if (isMobile || shouldReduceMotion) return;
+    if (isMobile || shouldReduceMotion || !containerRef.current) return;
 
-    const unsubscribe = scrollYProgress.on('change', (latest) => {
-      let nextStep = 0;
-      if (latest >= 0.68) {
-        nextStep = 3;
-      } else if (latest >= 0.42) {
-        nextStep = 2;
-      } else if (latest >= 0.16) {
-        nextStep = 1;
-      } else {
-        nextStep = 0;
+    const ctx = gsap.context(() => {
+      const tl = gsap.timeline({
+        scrollTrigger: {
+          trigger: containerRef.current,
+          pin: true,
+          start: 'top top',
+          end: '+=950', // Concise scroll distance: eliminates heavy effort during slow scrolling
+          scrub: 0.5, // 0.5s smooth interpolation for trackpad and cursor
+          anticipatePin: 1,
+          onUpdate: (self) => {
+            const p = self.progress;
+            // Transitions start earlier with hysteresis to prevent getting stuck during slow scrolling
+            setActiveStep((prev) => {
+              if (prev === 0 && p >= 0.12) return 1;
+              if (prev === 1 && p <= 0.08) return 0;
+              if (prev === 1 && p >= 0.42) return 2;
+              if (prev === 2 && p <= 0.38) return 1;
+              if (prev === 2 && p >= 0.72) return 3;
+              if (prev === 3 && p <= 0.68) return 2;
+              return prev;
+            });
+          },
+        },
+      });
+
+      scrollTriggerRef.current = tl.scrollTrigger || null;
+
+      if (phone3DRef.current) {
+        // Continuous, fluid 3D phone rotation & scale synced to scroll scrub
+        tl.fromTo(
+          phone3DRef.current,
+          { rotateY: -15, rotateX: 4, scale: 1 },
+          { rotateY: 0, rotateX: 7, scale: 1.04, ease: 'power1.inOut', duration: 0.33 }
+        )
+          .to(phone3DRef.current, {
+            rotateY: 12,
+            rotateX: 2,
+            scale: 1.06,
+            ease: 'power1.inOut',
+            duration: 0.33,
+          })
+          .to(phone3DRef.current, {
+            rotateY: 0,
+            rotateX: 0,
+            scale: 1,
+            ease: 'power1.inOut',
+            duration: 0.34,
+          });
       }
-      setActiveStep((prev) => (prev !== nextStep ? nextStep : prev));
-    });
+    }, containerRef);
 
-    return () => unsubscribe();
-  }, [scrollYProgress, isMobile, shouldReduceMotion]);
+    return () => {
+      ctx.revert();
+      scrollTriggerRef.current = null;
+    };
+  }, [isMobile, shouldReduceMotion]);
 
   // Mobile IntersectionObserver to sync active card when scrolled into view
   useEffect(() => {
@@ -171,13 +211,11 @@ export const ScrollStory: React.FC = () => {
       return;
     }
 
-    if (containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      const scrollableDist = rect.height - window.innerHeight;
-      const stageProgressMap = [0.06, 0.28, 0.54, 0.82];
-      const targetProgress = stageProgressMap[idx];
-      const targetY = window.scrollY + rect.top + targetProgress * scrollableDist;
-      window.scrollTo({ top: targetY, behavior: 'smooth' });
+    const st = scrollTriggerRef.current;
+    if (st) {
+      const stageProgressMap = [0.04, 0.26, 0.56, 0.86];
+      const targetScroll = st.start + stageProgressMap[idx] * (st.end - st.start);
+      window.scrollTo({ top: targetScroll, behavior: 'smooth' });
     }
   };
 
@@ -196,43 +234,30 @@ export const ScrollStory: React.FC = () => {
     }
   };
 
-  // 3D Phone poses per stage
-  const phonePoses = [
-    { rotateY: -15, rotateX: 4, scale: 1 },
-    { rotateY: 0, rotateX: 8, scale: 1.04 },
-    { rotateY: 12, rotateX: 2, scale: 1.06 },
-    { rotateY: 0, rotateX: 0, scale: 1 },
-  ];
-
-  const currentPose = isMobile || shouldReduceMotion ? { rotateY: 0, rotateX: 0, scale: 1 } : phonePoses[activeStep];
-
   return (
     <section
       ref={containerRef}
       id="story"
       className="relative bg-beige-sand/60 border-t border-beige-dark/50 scroll-mt-24 sm:scroll-mt-28"
-      style={{
-        height: !isMobile && !shouldReduceMotion ? '260vh' : 'auto',
-      }}
     >
-      {/* Sticky Pinned Container for Desktop, standard flow for mobile/reduced motion */}
+      {/* Pinned Container for Desktop GSAP ScrollTrigger, standard flow for mobile/reduced motion */}
       <div
         className={`${
           !isMobile && !shouldReduceMotion
-            ? 'sticky top-0 h-screen w-full flex flex-col justify-center overflow-hidden'
+            ? 'w-full min-h-screen flex flex-col justify-center pt-24 pb-10 overflow-hidden'
             : 'py-20 sm:py-28 overflow-hidden'
         }`}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
           {/* Section Header */}
-          <div className="text-center max-w-2xl mx-auto mb-8 sm:mb-10">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cream border border-beige-dark text-xs font-semibold text-terracotta mb-3">
+          <div className="text-center max-w-2xl mx-auto mb-5 sm:mb-6">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cream border border-beige-dark text-xs font-semibold text-terracotta mb-2.5">
               <span>Scroll-Through Experience</span>
             </div>
             <h2 className="font-serif font-black text-3xl sm:text-4xl lg:text-5xl text-charcoal tracking-tight">
               A day on EVENTO
             </h2>
-            <p className="mt-4 text-base sm:text-lg text-mutedbrown">
+            <p className="mt-3 text-base sm:text-lg text-mutedbrown">
               From waking up in the dorm to walking into the auditorium — here is how an RU student navigates their campus week.
             </p>
           </div>
@@ -293,24 +318,13 @@ export const ScrollStory: React.FC = () => {
                 transition={{ repeat: Infinity, duration: 4.8, ease: 'easeInOut' }}
                 className="flex justify-center items-center"
               >
-                {/* 3D Transform pose container with smooth responsive spring */}
-                <motion.div
+                {/* 3D Transform pose container scrubbed smoothly by GSAP */}
+                <div
+                  ref={phone3DRef}
                   id="story-phone-3d"
-                  animate={{
-                    rotateY: currentPose.rotateY,
-                    rotateX: currentPose.rotateX,
-                    scale:
-                      activeStep === 3 && stage4Notified && !shouldReduceMotion
-                        ? [currentPose.scale, currentPose.scale * 1.04, currentPose.scale * 0.99, currentPose.scale]
-                        : currentPose.scale,
+                  style={{
+                    transformStyle: 'preserve-3d',
                   }}
-                  transition={{
-                    type: 'spring',
-                    stiffness: 180,
-                    damping: 24,
-                    mass: 0.5,
-                  }}
-                  style={{ transformStyle: 'preserve-3d' }}
                   className="will-change-transform"
                 >
                   {/* Phone Mockup Frame (Original Design & Dimensions) */}
@@ -354,344 +368,336 @@ export const ScrollStory: React.FC = () => {
                         )}
                       </AnimatePresence>
 
-                      {/* Fast, Butter-Smooth Animated Screens based on Active Step */}
+                      {/* Fast, Butter-Smooth GPU-accelerated Screens */}
                       <div className="flex-1 overflow-hidden relative">
-                        <AnimatePresence mode="popLayout" initial={false}>
-                          {/* Stage 01: Home Timeline Feed */}
-                          {activeStep === 0 && (
-                            <motion.div
-                              key="screen-1"
-                              initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 12 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: shouldReduceMotion ? 0 : -12 }}
-                              transition={{ duration: 0.22, ease: [0.25, 1, 0.5, 1] }}
-                              className="space-y-2.5 pt-1"
-                            >
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <span className="text-[10px] font-bold text-terracotta uppercase">Today at RU</span>
-                                  <div className="text-xs font-serif font-bold text-charcoal">Upcoming Events</div>
-                                </div>
-                                <div className="w-6 h-6 rounded-full bg-beige-sand flex items-center justify-center">
-                                  <Search className="w-3 h-3 text-charcoal" />
-                                </div>
-                              </div>
+                        {/* Stage 01: Home Timeline Feed */}
+                        <div
+                          className={`absolute inset-0 flex flex-col space-y-2.5 pt-1 transition-all duration-300 ease-out will-change-[transform,opacity] ${
+                            activeStep === 0
+                              ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto z-10'
+                              : activeStep > 0
+                              ? 'opacity-0 -translate-y-3 scale-[0.98] pointer-events-none z-0'
+                              : 'opacity-0 translate-y-3 scale-[0.98] pointer-events-none z-0'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="text-[10px] font-bold text-terracotta uppercase">Today at RU</span>
+                              <div className="text-xs font-serif font-bold text-charcoal">Upcoming Events</div>
+                            </div>
+                            <div className="w-6 h-6 rounded-full bg-beige-sand flex items-center justify-center">
+                              <Search className="w-3 h-3 text-charcoal" />
+                            </div>
+                          </div>
 
-                              {/* Event Card 1 */}
-                              <div className="bg-cream rounded-2xl p-2.5 border border-beige-dark/60 shadow-warm-sm">
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-cat-newton-bg text-cat-newton">
-                                    Newton Event
-                                  </span>
-                                  <span className="text-[9px] text-terracotta font-mono font-bold flex items-center gap-1">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-terracotta animate-pulse" />
-                                    In {formatCountdown(countdownSeconds)}
-                                  </span>
-                                </div>
-                                <h4 className="font-serif font-bold text-xs text-charcoal">
-                                  HackRU 2026: 36h Code Sprint
-                                </h4>
-                                <p className="text-[10px] text-mutedbrown mt-0.5">Tinkering Lab, Block B • 10:00 AM</p>
-                              </div>
+                          {/* Event Card 1 */}
+                          <div className="bg-cream rounded-2xl p-2.5 border border-beige-dark/60 shadow-warm-sm">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-cat-newton-bg text-cat-newton">
+                                Newton Event
+                              </span>
+                              <span className="text-[9px] text-terracotta font-mono font-bold flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-terracotta animate-pulse" />
+                                In {formatCountdown(countdownSeconds)}
+                              </span>
+                            </div>
+                            <h4 className="font-serif font-bold text-xs text-charcoal">
+                              HackRU 2026: 36h Code Sprint
+                            </h4>
+                            <p className="text-[10px] text-mutedbrown mt-0.5">Tinkering Lab, Block B • 10:00 AM</p>
+                          </div>
 
-                              {/* Event Card 2 */}
-                              <div className="bg-cream rounded-2xl p-2.5 border border-beige-dark/60 shadow-warm-sm">
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-cat-club-bg text-cat-club">
-                                    Club Event
-                                  </span>
-                                  <span className="text-[9px] text-mutedbrown font-medium">Tomorrow</span>
-                                </div>
-                                <h4 className="font-serif font-bold text-xs text-charcoal">Cultural Fest Auditions</h4>
-                                <p className="text-[10px] text-mutedbrown mt-0.5">Open Air Amphitheatre • 4:30 PM</p>
-                              </div>
+                          {/* Event Card 2 */}
+                          <div className="bg-cream rounded-2xl p-2.5 border border-beige-dark/60 shadow-warm-sm">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-cat-club-bg text-cat-club">
+                                Club Event
+                              </span>
+                              <span className="text-[9px] text-mutedbrown font-medium">Tomorrow</span>
+                            </div>
+                            <h4 className="font-serif font-bold text-xs text-charcoal">Cultural Fest Auditions</h4>
+                            <p className="text-[10px] text-mutedbrown mt-0.5">Open Air Amphitheatre • 4:30 PM</p>
+                          </div>
 
-                              {/* Event Card 3 */}
-                              <div className="bg-cream rounded-2xl p-2.5 border border-beige-dark/60 shadow-warm-sm">
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-cat-ru-bg text-cat-ru">
-                                    RU Official
-                                  </span>
-                                  <span className="text-[9px] text-mutedbrown font-medium">Wed, Nov 19</span>
-                                </div>
-                                <h4 className="font-serif font-bold text-xs text-charcoal">
-                                  Annual Convocation Rehearsal
-                                </h4>
-                                <p className="text-[10px] text-mutedbrown mt-0.5">
-                                  Main Auditorium, Ground Fl. • 2:00 PM
-                                </p>
-                              </div>
+                          {/* Event Card 3 */}
+                          <div className="bg-cream rounded-2xl p-2.5 border border-beige-dark/60 shadow-warm-sm">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-cat-ru-bg text-cat-ru">
+                                RU Official
+                              </span>
+                              <span className="text-[9px] text-mutedbrown font-medium">Wed, Nov 19</span>
+                            </div>
+                            <h4 className="font-serif font-bold text-xs text-charcoal">
+                              Annual Convocation Rehearsal
+                            </h4>
+                            <p className="text-[10px] text-mutedbrown mt-0.5">
+                              Main Auditorium, Ground Fl. • 2:00 PM
+                            </p>
+                          </div>
 
-                              {/* Verified Council Shield Footer */}
-                              <div className="p-2 bg-terracotta/10 rounded-xl text-[9px] text-terracotta font-medium flex items-center gap-1.5">
-                                <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-                                <span>All events verified by RU student council</span>
-                              </div>
-                            </motion.div>
-                          )}
+                          {/* Verified Council Shield Footer */}
+                          <div className="p-2 bg-terracotta/10 rounded-xl text-[9px] text-terracotta font-medium flex items-center gap-1.5">
+                            <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                            <span>All events verified by RU student council</span>
+                          </div>
+                        </div>
 
-                          {/* Stage 02: Month Calendar View */}
-                          {activeStep === 1 && (
-                            <motion.div
-                              key="screen-2"
-                              initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 12 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: shouldReduceMotion ? 0 : -12 }}
-                              transition={{ duration: 0.22, ease: [0.25, 1, 0.5, 1] }}
-                              className="space-y-2 pt-1"
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="font-serif font-bold text-xs text-charcoal">November 2026</span>
-                                <span className="text-[10px] text-terracotta font-bold">Month View</span>
-                              </div>
+                        {/* Stage 02: Month Calendar View */}
+                        <div
+                          className={`absolute inset-0 flex flex-col space-y-2 pt-1 transition-all duration-300 ease-out will-change-[transform,opacity] ${
+                            activeStep === 1
+                              ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto z-10'
+                              : activeStep > 1
+                              ? 'opacity-0 -translate-y-3 scale-[0.98] pointer-events-none z-0'
+                              : 'opacity-0 translate-y-3 scale-[0.98] pointer-events-none z-0'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-serif font-bold text-xs text-charcoal">November 2026</span>
+                            <span className="text-[10px] text-terracotta font-bold">Month View</span>
+                          </div>
 
-                              {/* Calendar Mini Grid */}
-                              <div className="bg-cream rounded-2xl p-2 border border-beige-dark/60 shadow-warm-sm">
-                                <div className="grid grid-cols-7 gap-1 text-[8.5px] font-bold text-center text-mutedbrown mb-1">
-                                  <span>M</span>
-                                  <span>T</span>
-                                  <span>W</span>
-                                  <span>T</span>
-                                  <span>F</span>
-                                  <span>S</span>
-                                  <span>S</span>
-                                </div>
-                                <div className="grid grid-cols-7 gap-0.5 text-center text-[9.5px]">
-                                  {Array.from({ length: 28 }).map((_, i) => {
-                                    const day = i + 1;
-                                    const isTargetDay = day === 14;
-                                    const hasBlue = day === 14 || day === 22;
-                                    const hasGreen = day === 17 || day === 20;
-                                    const hasRed = day === 19;
-                                    const hasPersonal = day === 10 || day === 25;
+                          {/* Calendar Mini Grid */}
+                          <div className="bg-cream rounded-2xl p-2 border border-beige-dark/60 shadow-warm-sm">
+                            <div className="grid grid-cols-7 gap-1 text-[8.5px] font-bold text-center text-mutedbrown mb-1">
+                              <span>M</span>
+                              <span>T</span>
+                              <span>W</span>
+                              <span>T</span>
+                              <span>F</span>
+                              <span>S</span>
+                              <span>S</span>
+                            </div>
+                            <div className="grid grid-cols-7 gap-0.5 text-center text-[9.5px]">
+                              {Array.from({ length: 28 }).map((_, i) => {
+                                const day = i + 1;
+                                const isTargetDay = day === 14;
+                                const hasBlue = day === 14 || day === 22;
+                                const hasGreen = day === 17 || day === 20;
+                                const hasRed = day === 19;
+                                const hasPersonal = day === 10 || day === 25;
 
-                                    return (
-                                      <div
-                                        key={day}
-                                        className={`py-1 rounded-lg relative flex flex-col items-center justify-center transition-colors ${
-                                          isTargetDay
-                                            ? 'bg-terracotta-soft text-terracotta font-bold ring-1 ring-terracotta/40'
-                                            : 'text-charcoal'
-                                        }`}
-                                      >
-                                        <span>{day}</span>
-                                        <div className="flex gap-0.5 mt-0.5 h-1 items-center">
-                                          {hasBlue && <span className="w-1 h-1 rounded-full bg-cat-newton" />}
-                                          {hasGreen && <span className="w-1 h-1 rounded-full bg-cat-club" />}
-                                          {hasRed && <span className="w-1 h-1 rounded-full bg-cat-ru" />}
-                                          {hasPersonal && <span className="w-1 h-1 rounded-full bg-cat-personal" />}
-                                        </div>
-
-                                        {/* Auto-tapped ripple ring on Day 14 */}
-                                        {isTargetDay && !shouldReduceMotion && (
-                                          <motion.span
-                                            className="absolute inset-0 rounded-lg border-2 border-terracotta pointer-events-none"
-                                            animate={{ scale: [1, 1.8], opacity: [0.9, 0] }}
-                                            transition={{
-                                              duration: 1.4,
-                                              repeat: Infinity,
-                                              ease: 'easeOut',
-                                              delay: 0.1,
-                                            }}
-                                          />
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-
-                              {/* Tapped Day's Event Card */}
-                              <div className="bg-cream rounded-xl p-2.5 border border-terracotta/30 shadow-warm-sm">
-                                <div className="flex items-center justify-between text-[9px] mb-1">
-                                  <span className="font-bold text-terracotta">Selected Day • Fri, Nov 14</span>
-                                  <span className="px-1.5 py-0.5 rounded-full bg-cat-newton-bg text-cat-newton font-bold text-[8px]">
-                                    1 Event
-                                  </span>
-                                </div>
-                                <h4 className="font-serif font-bold text-xs text-charcoal truncate">
-                                  HackRU 2026: 36h Code Sprint
-                                </h4>
-                                <p className="text-[9.5px] text-mutedbrown mt-0.5">
-                                  Tinkering Lab, Block B • 10:00 AM - 10:00 PM
-                                </p>
-                              </div>
-
-                              {/* Legend */}
-                              <div className="grid grid-cols-2 gap-1 text-[8.5px] text-mutedbrown font-medium px-1">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="w-2 h-2 rounded-full bg-cat-ru shrink-0" />
-                                  <span>Red = RU Official</span>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="w-2 h-2 rounded-full bg-cat-newton shrink-0" />
-                                  <span>Blue = Newton</span>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="w-2 h-2 rounded-full bg-cat-club shrink-0" />
-                                  <span>Green = Club</span>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="w-2 h-2 rounded-full bg-cat-personal shrink-0" />
-                                  <span>Grey = Personal</span>
-                                </div>
-                              </div>
-                            </motion.div>
-                          )}
-
-                          {/* Stage 03: Event Details View */}
-                          {activeStep === 2 && (
-                            <motion.div
-                              key="screen-3"
-                              initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 12 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: shouldReduceMotion ? 0 : -12 }}
-                              transition={{ duration: 0.22, ease: [0.25, 1, 0.5, 1] }}
-                              className="space-y-2.5 pt-1"
-                            >
-                              {/* Poster Header */}
-                              <div className="h-20 w-full rounded-2xl bg-gradient-to-r from-blue-700 via-indigo-700 to-sky-600 p-2.5 flex flex-col justify-between text-white shadow-sm relative overflow-hidden">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-sm">
-                                    Newton School
-                                  </span>
-                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-white/25">
-                                    NCS
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-[11px] font-serif font-bold block leading-snug">
-                                    HackRU 2026 Code Sprint
-                                  </span>
-                                  <span className="text-[8px] text-white/80 block mt-0.5">
-                                    Organized by Newton Coding Society
-                                  </span>
-                                </div>
-                              </div>
-
-                              {/* Event Details Card */}
-                              <div className="bg-cream rounded-2xl p-2.5 border border-beige-dark/60 space-y-2 text-[10px]">
-                                <div className="flex items-center gap-2 text-charcoal">
-                                  <Clock className="w-3.5 h-3.5 text-terracotta shrink-0" />
-                                  <span className="font-semibold">Friday, Nov 14 • 10:00 AM - 10:00 PM</span>
-                                </div>
-
-                                <div className="flex items-center gap-2 text-charcoal">
-                                  <span className="relative flex h-3.5 w-3.5 items-center justify-center shrink-0">
-                                    {!shouldReduceMotion && (
-                                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-terracotta/40 opacity-75" />
-                                    )}
-                                    <MapPin className="relative w-3.5 h-3.5 text-terracotta shrink-0" />
-                                  </span>
-                                  <span className="font-semibold">Tinkering Lab, Block B, Floor 2</span>
-                                </div>
-
-                                <div className="border-t border-beige-dark/40 pt-1.5 text-mutedbrown leading-relaxed text-[9px]">
-                                  Power sockets, Wi-Fi 6, and meals provided for all registered participants. Mentorship desk opens at 11 AM.
-                                </div>
-                              </div>
-
-                              {/* Notify Me button at bottom of screen 3 */}
-                              <button
-                                type="button"
-                                onClick={() => handleStepClick(3)}
-                                className="w-full py-2 px-3 rounded-xl bg-terracotta text-cream text-[10px] font-bold shadow-sm flex items-center justify-center gap-1.5 hover:bg-terracotta-dark transition-colors"
-                              >
-                                <Bell className="w-3.5 h-3.5" />
-                                <span>Notify me</span>
-                              </button>
-                            </motion.div>
-                          )}
-
-                          {/* Stage 04: Animated Finger Tap, Ringing Bell, Confetti, and Reminder Set */}
-                          {activeStep === 3 && (
-                            <motion.div
-                              key="screen-4"
-                              initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 12 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: shouldReduceMotion ? 0 : -12 }}
-                              transition={{ duration: 0.22, ease: [0.25, 1, 0.5, 1] }}
-                              className="space-y-3 pt-4 text-center relative"
-                            >
-                              {/* Ringing Bell Icon */}
-                              <motion.div
-                                animate={
-                                  bellRinging && !shouldReduceMotion
-                                    ? { rotate: [0, -18, 18, -12, 12, -6, 6, 0] }
-                                    : { rotate: 0 }
-                                }
-                                transition={{ duration: 0.5 }}
-                                className="w-14 h-14 rounded-full bg-terracotta-soft text-terracotta flex items-center justify-center mx-auto mb-2 shadow-sm will-change-transform"
-                              >
-                                <Bell className="w-7 h-7" />
-                              </motion.div>
-
-                              <h4 className="font-serif font-bold text-sm text-charcoal">Stay in the loop!</h4>
-                              <p className="text-[10px] text-mutedbrown max-w-[210px] mx-auto">
-                                Tap the button below to test the interactive 1-tap reminder state.
-                              </p>
-
-                              <div className="relative pt-2">
-                                <button
-                                  type="button"
-                                  onClick={handleToggleNotify}
-                                  className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-2 ${
-                                    stage4Notified
-                                      ? 'bg-cat-club text-white'
-                                      : 'bg-terracotta text-cream hover:bg-terracotta-dark'
-                                  }`}
-                                >
-                                  {stage4Notified ? (
-                                    <>
-                                      <Check className="w-4 h-4 stroke-[3]" />
-                                      <span>Reminder set! (Ping 1h before)</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Bell className="w-4 h-4" />
-                                      <span>Notify me</span>
-                                    </>
-                                  )}
-                                </button>
-
-                                {/* Animated Finger Pointer automatically tapping Notify me */}
-                                {!shouldReduceMotion && !stage4Notified && (
-                                  <motion.div
-                                    initial={{ opacity: 0, x: 28, y: 28, scale: 1 }}
-                                    animate={{
-                                      opacity: [0, 1, 1, 1, 0],
-                                      x: [28, 0, 0, 0, 12],
-                                      y: [28, 0, 0, 0, 12],
-                                      scale: [1, 1, 0.82, 1, 1],
-                                    }}
-                                    transition={{
-                                      duration: 1.1,
-                                      times: [0, 0.35, 0.55, 0.75, 1],
-                                      ease: 'easeInOut',
-                                    }}
-                                    className="absolute bottom-1 right-10 pointer-events-none z-30"
+                                return (
+                                  <div
+                                    key={day}
+                                    className={`py-1 rounded-lg relative flex flex-col items-center justify-center transition-colors ${
+                                      isTargetDay
+                                        ? 'bg-terracotta-soft text-terracotta font-bold ring-1 ring-terracotta/40'
+                                        : 'text-charcoal'
+                                    }`}
                                   >
-                                    <svg
-                                      width="28"
-                                      height="28"
-                                      viewBox="0 0 24 24"
-                                      fill="none"
-                                      className="drop-shadow-md"
-                                    >
-                                      <path
-                                        d="M10 2v10a2 2 0 0 1-4 0V5a1.5 1.5 0 0 0-3 0v11a7 7 0 0 0 14 0V9a1.5 1.5 0 0 0-3 0v3a1.5 1.5 0 0 0-3 0V2a1.5 1.5 0 0 0-3 0z"
-                                        fill="#F5EFE6"
-                                        stroke="#2D2824"
-                                        strokeWidth="1.5"
-                                        strokeLinejoin="round"
+                                    <span>{day}</span>
+                                    <div className="flex gap-0.5 mt-0.5 h-1 items-center">
+                                      {hasBlue && <span className="w-1 h-1 rounded-full bg-cat-newton" />}
+                                      {hasGreen && <span className="w-1 h-1 rounded-full bg-cat-club" />}
+                                      {hasRed && <span className="w-1 h-1 rounded-full bg-cat-ru" />}
+                                      {hasPersonal && <span className="w-1 h-1 rounded-full bg-cat-personal" />}
+                                    </div>
+
+                                    {/* Auto-tapped ripple ring on Day 14 */}
+                                    {isTargetDay && !shouldReduceMotion && (
+                                      <motion.span
+                                        className="absolute inset-0 rounded-lg border-2 border-terracotta pointer-events-none"
+                                        animate={{ scale: [1, 1.8], opacity: [0.9, 0] }}
+                                        transition={{
+                                          duration: 1.4,
+                                          repeat: Infinity,
+                                          ease: 'easeOut',
+                                          delay: 0.1,
+                                        }}
                                       />
-                                    </svg>
-                                  </motion.div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Tapped Day's Event Card */}
+                          <div className="bg-cream rounded-xl p-2.5 border border-terracotta/30 shadow-warm-sm">
+                            <div className="flex items-center justify-between text-[9px] mb-1">
+                              <span className="font-bold text-terracotta">Selected Day • Fri, Nov 14</span>
+                              <span className="px-1.5 py-0.5 rounded-full bg-cat-newton-bg text-cat-newton font-bold text-[8px]">
+                                1 Event
+                              </span>
+                            </div>
+                            <h4 className="font-serif font-bold text-xs text-charcoal truncate">
+                              HackRU 2026: 36h Code Sprint
+                            </h4>
+                            <p className="text-[9.5px] text-mutedbrown mt-0.5">
+                              Tinkering Lab, Block B • 10:00 AM - 10:00 PM
+                            </p>
+                          </div>
+
+                          {/* Legend */}
+                          <div className="grid grid-cols-2 gap-1 text-[8.5px] text-mutedbrown font-medium px-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-cat-ru shrink-0" />
+                              <span>Red = RU Official</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-cat-newton shrink-0" />
+                              <span>Blue = Newton</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-cat-club shrink-0" />
+                              <span>Green = Club</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-cat-personal shrink-0" />
+                              <span>Grey = Personal</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Stage 03: Event Details View */}
+                        <div
+                          className={`absolute inset-0 flex flex-col space-y-2.5 pt-1 transition-all duration-300 ease-out will-change-[transform,opacity] ${
+                            activeStep === 2
+                              ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto z-10'
+                              : activeStep > 2
+                              ? 'opacity-0 -translate-y-3 scale-[0.98] pointer-events-none z-0'
+                              : 'opacity-0 translate-y-3 scale-[0.98] pointer-events-none z-0'
+                          }`}
+                        >
+                          {/* Poster Header */}
+                          <div className="h-20 w-full rounded-2xl bg-gradient-to-r from-blue-700 via-indigo-700 to-sky-600 p-2.5 flex flex-col justify-between text-white shadow-sm relative overflow-hidden">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-sm">
+                                Newton School
+                              </span>
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-white/25">
+                                NCS
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-[11px] font-serif font-bold block leading-snug">
+                                HackRU 2026 Code Sprint
+                              </span>
+                              <span className="text-[8px] text-white/80 block mt-0.5">
+                                Organized by Newton Coding Society
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Event Details Card */}
+                          <div className="bg-cream rounded-2xl p-2.5 border border-beige-dark/60 space-y-2 text-[10px]">
+                            <div className="flex items-center gap-2 text-charcoal">
+                              <Clock className="w-3.5 h-3.5 text-terracotta shrink-0" />
+                              <span className="font-semibold">Friday, Nov 14 • 10:00 AM - 10:00 PM</span>
+                            </div>
+
+                            <div className="flex items-center gap-2 text-charcoal">
+                              <span className="relative flex h-3.5 w-3.5 items-center justify-center shrink-0">
+                                {!shouldReduceMotion && (
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-terracotta/40 opacity-75" />
                                 )}
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
+                                <MapPin className="relative w-3.5 h-3.5 text-terracotta shrink-0" />
+                              </span>
+                              <span className="font-semibold">Tinkering Lab, Block B, Floor 2</span>
+                            </div>
+
+                            <div className="border-t border-beige-dark/40 pt-1.5 text-mutedbrown leading-relaxed text-[9px]">
+                              Power sockets, Wi-Fi 6, and meals provided for all registered participants. Mentorship desk opens at 11 AM.
+                            </div>
+                          </div>
+
+                          {/* Notify Me button at bottom of screen 3 */}
+                          <button
+                            type="button"
+                            onClick={() => handleStepClick(3)}
+                            className="w-full py-2 px-3 rounded-xl bg-terracotta text-cream text-[10px] font-bold shadow-sm flex items-center justify-center gap-1.5 hover:bg-terracotta-dark transition-colors"
+                          >
+                            <Bell className="w-3.5 h-3.5" />
+                            <span>Notify me</span>
+                          </button>
+                        </div>
+
+                        {/* Stage 04: Animated Finger Tap, Ringing Bell, Confetti, and Reminder Set */}
+                        <div
+                          className={`absolute inset-0 flex flex-col space-y-3 pt-4 text-center relative transition-all duration-300 ease-out will-change-[transform,opacity] ${
+                            activeStep === 3
+                              ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto z-10'
+                              : 'opacity-0 translate-y-3 scale-[0.98] pointer-events-none z-0'
+                          }`}
+                        >
+                          {/* Ringing Bell Icon */}
+                          <motion.div
+                            animate={
+                              bellRinging && !shouldReduceMotion
+                                ? { rotate: [0, -18, 18, -12, 12, -6, 6, 0] }
+                                : { rotate: 0 }
+                            }
+                            transition={{ duration: 0.5 }}
+                            className="w-14 h-14 rounded-full bg-terracotta-soft text-terracotta flex items-center justify-center mx-auto mb-2 shadow-sm will-change-transform"
+                          >
+                            <Bell className="w-7 h-7" />
+                          </motion.div>
+
+                          <h4 className="font-serif font-bold text-sm text-charcoal">Stay in the loop!</h4>
+                          <p className="text-[10px] text-mutedbrown max-w-[210px] mx-auto">
+                            Tap the button below to test the interactive 1-tap reminder state.
+                          </p>
+
+                          <div className="relative pt-2">
+                            <button
+                              type="button"
+                              onClick={handleToggleNotify}
+                              className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-2 ${
+                                stage4Notified
+                                  ? 'bg-cat-club text-white'
+                                  : 'bg-terracotta text-cream hover:bg-terracotta-dark'
+                              }`}
+                            >
+                              {stage4Notified ? (
+                                <>
+                                  <Check className="w-4 h-4 stroke-[3]" />
+                                  <span>Reminder set! (Ping 1h before)</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Bell className="w-4 h-4" />
+                                  <span>Notify me</span>
+                                </>
+                              )}
+                            </button>
+
+                            {/* Animated Finger Pointer automatically tapping Notify me */}
+                            {!shouldReduceMotion && !stage4Notified && (
+                              <motion.div
+                                initial={{ opacity: 0, x: 28, y: 28, scale: 1 }}
+                                animate={{
+                                  opacity: [0, 1, 1, 1, 0],
+                                  x: [28, 0, 0, 0, 12],
+                                  y: [28, 0, 0, 0, 12],
+                                  scale: [1, 1, 0.82, 1, 1],
+                                }}
+                                transition={{
+                                  duration: 1.1,
+                                  times: [0, 0.35, 0.55, 0.75, 1],
+                                  ease: 'easeInOut',
+                                }}
+                                className="absolute bottom-1 right-10 pointer-events-none z-30"
+                              >
+                                <svg
+                                  width="28"
+                                  height="28"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  className="drop-shadow-md"
+                                >
+                                  <path
+                                    d="M10 2v10a2 2 0 0 1-4 0V5a1.5 1.5 0 0 0-3 0v11a7 7 0 0 0 14 0V9a1.5 1.5 0 0 0-3 0v3a1.5 1.5 0 0 0-3 0V2a1.5 1.5 0 0 0-3 0z"
+                                    fill="#F5EFE6"
+                                    stroke="#2D2824"
+                                    strokeWidth="1.5"
+                                    strokeLinejoin="round"
+                                  />
+                                </svg>
+                              </motion.div>
+                            )}
+                          </div>
+                        </div>
                       </div>
 
                       {/* Bottom Navigation Bar of Mock Phone (Highlights matching tab) */}
@@ -729,7 +735,7 @@ export const ScrollStory: React.FC = () => {
                       <div className="w-24 h-1 bg-charcoal/30 rounded-full mx-auto mt-1" />
                     </div>
                   </div>
-                </motion.div>
+                </div>
               </motion.div>
             </div>
           </div>
