@@ -12,7 +12,7 @@ export const Navbar: React.FC = () => {
       setIsScrolled(window.scrollY > 20);
 
       // Detect active section
-      const sections = ['hero', 'problem', 'story', 'showcase', 'calendar', 'organizers', 'faq'];
+      const sections = ['hero', 'problem', 'story', 'calendar', 'organizers', 'faq'];
       const scrollPos = window.scrollY + 120;
 
       for (const sectionId of sections) {
@@ -76,16 +76,6 @@ export const Navbar: React.FC = () => {
               </a>
             ))}
             <div className="w-[1px] h-4 bg-beige-dark/60 mx-1" />
-            <a
-              href="#showcase"
-              className={`px-3.5 py-1.5 text-sm font-medium rounded-full transition-all duration-150 ${
-                activeSection === 'showcase'
-                  ? 'text-terracotta font-semibold bg-terracotta-soft/50'
-                  : 'text-mutedbrown hover:text-charcoal'
-              }`}
-            >
-              Browse
-            </a>
             <a
               href="#calendar"
               className={`px-3.5 py-1.5 text-sm font-medium rounded-full transition-all duration-150 ${
@@ -179,13 +169,6 @@ export const Navbar: React.FC = () => {
                 className="px-3 py-2 text-sm text-mutedbrown hover:text-charcoal hover:bg-beige rounded-xl"
               >
                 A Day on EVENTO
-              </a>
-              <a
-                href="#showcase"
-                onClick={() => setMobileMenuOpen(false)}
-                className="px-3 py-2 text-sm text-mutedbrown hover:text-charcoal hover:bg-beige rounded-xl"
-              >
-                Live Event Cards
               </a>
               <a
                 href="#calendar"

@@ -7,7 +7,6 @@ import { Hero } from './components/Hero';
 import { ClubMarquee } from './components/ClubMarquee';
 import { ChaosToOrder } from './components/ChaosToOrder';
 import { ScrollStory } from './components/ScrollStory';
-import { EventShowcase } from './components/EventShowcase';
 import { MiniCalendar } from './components/MiniCalendar';
 import { NotifyShareDemo } from './components/NotifyShareDemo';
 import { OrganizerFlow } from './components/OrganizerFlow';
@@ -45,9 +44,6 @@ export const App: React.FC = () => {
 
         {/* Section 6: Pinned Scroll-Story: A Day on EVENTO */}
         <ScrollStory />
-
-        {/* Section 7: Live-feeling Event Cards Showcase */}
-        <EventShowcase />
 
         {/* Section 8: Colour-Coded Campus Calendar Preview */}
         <MiniCalendar />
