@@ -8,7 +8,6 @@ import { ClubMarquee } from './components/ClubMarquee';
 import { ChaosToOrder } from './components/ChaosToOrder';
 import { ScrollStory } from './components/ScrollStory';
 import { NotifyShareDemo } from './components/NotifyShareDemo';
-import { OrganizerFlow } from './components/OrganizerFlow';
 import { Features } from './components/Features';
 import { StatsStrip } from './components/StatsStrip';
 import { FAQ } from './components/FAQ';
@@ -46,9 +45,6 @@ export const App: React.FC = () => {
 
         {/* Section 9: Notify and Share Demo */}
         <NotifyShareDemo />
-
-        {/* Section 10: For Organizers (@rishihood.edu.in) */}
-        <OrganizerFlow />
 
         {/* Section 11: Feature Highlights */}
         <Features />

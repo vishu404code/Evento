@@ -85,8 +85,8 @@ export const Footer: React.FC = () => {
                   </a>
                 </li>
                 <li>
-                  <a href="#calendar" className="hover:text-terracotta transition-colors">
-                    Calendar View
+                  <a href="#notify" className="hover:text-terracotta transition-colors">
+                    1-Tap Alerts
                   </a>
                 </li>
                 <li>
