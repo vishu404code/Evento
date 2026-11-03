@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ArrowRight, Calendar as CalendarIcon, ChevronDown, Sparkles } from 'lucide-react';
+import { ArrowRight, Calendar as CalendarIcon, Sparkles } from 'lucide-react';
 import { FloatingEventCards } from './FloatingEventCards';
 
 export const Hero: React.FC = () => {
@@ -156,21 +156,6 @@ export const Hero: React.FC = () => {
             <FloatingEventCards />
           </motion.div>
         </div>
-      </div>
-
-      {/* Bouncing scroll indicator at bottom */}
-      <div className="mt-8 sm:mt-12 flex flex-col items-center justify-center gap-1.5 text-mutedbrown/70 hover:text-terracotta transition-colors pointer-events-auto">
-        <a href="#marquee" className="flex flex-col items-center gap-1 group" aria-label="Scroll down to clubs">
-          <span className="text-[11px] font-semibold uppercase tracking-widest text-mutedbrown/80 group-hover:text-terracotta">
-            Scroll to explore
-          </span>
-          <motion.div
-            animate={{ y: [0, 6, 0] }}
-            transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-          >
-            <ChevronDown className="w-4 h-4 text-terracotta" />
-          </motion.div>
-        </a>
       </div>
     </section>
   );
