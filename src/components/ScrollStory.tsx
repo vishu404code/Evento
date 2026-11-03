@@ -51,6 +51,9 @@ export const ScrollStory: React.FC = () => {
   const [bellRinging, setBellRinging] = useState(false);
   const stage4Triggered = useRef(false);
 
+  // Desktop mouse parallax tilt state
+  const [mouseTilt, setMouseTilt] = useState({ x: 0, y: 0 });
+
   // Countdown timer for Stage 1: 'In 2 hours' counts down
   const [countdownSeconds, setCountdownSeconds] = useState(7142);
 
@@ -242,6 +245,29 @@ export const ScrollStory: React.FC = () => {
     }
   };
 
+  // Desktop mouse parallax tilt handlers
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isMobile || shouldReduceMotion) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width - 0.5;
+    const y = (e.clientY - rect.top) / rect.height - 0.5;
+    setMouseTilt({ x: x * 6, y: y * -6 });
+  };
+
+  const handleMouseLeave = () => {
+    setMouseTilt({ x: 0, y: 0 });
+  };
+
+  // 3D Phone poses per stage
+  const phonePoses = [
+    { rotateY: -15, rotateX: 4, scale: 1 },
+    { rotateY: 0, rotateX: 8, scale: 1.04 },
+    { rotateY: 12, rotateX: 2, scale: 1.06 },
+    { rotateY: 0, rotateX: 0, scale: 1 },
+  ];
+
+  const currentPose = isMobile || shouldReduceMotion ? { rotateY: 0, rotateX: 0, scale: 1 } : phonePoses[activeStep];
+
   return (
     <section
       ref={containerRef}
@@ -250,6 +276,8 @@ export const ScrollStory: React.FC = () => {
       style={{
         height: !isMobile && !shouldReduceMotion ? '400vh' : 'auto',
       }}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
     >
       {/* Sticky Pinned Container for Desktop, standard flow for mobile/reduced motion */}
       <div
@@ -321,9 +349,35 @@ export const ScrollStory: React.FC = () => {
               })}
             </div>
 
-            {/* Right Column: Phone Mockup with changing screen */}
-            <div className="lg:col-span-6 flex justify-center items-center">
-              {/* Phone Mockup Frame (Original Design & Dimensions) */}
+            {/* Right Column: 3D Phone Mockup Container */}
+            <div className="lg:col-span-6 flex justify-center items-center" style={{ perspective: 1200 }}>
+              {/* Gentle idle float wrapper */}
+              <motion.div
+                animate={!shouldReduceMotion && !isMobile ? { y: [0, -6, 0] } : { y: 0 }}
+                transition={{ repeat: Infinity, duration: 4.8, ease: 'easeInOut' }}
+                className="flex justify-center items-center"
+              >
+                {/* 3D Transform pose & mouse parallax container */}
+                <motion.div
+                  id="story-phone-3d"
+                  animate={{
+                    rotateY: currentPose.rotateY + (isMobile || shouldReduceMotion ? 0 : mouseTilt.x),
+                    rotateX: currentPose.rotateX + (isMobile || shouldReduceMotion ? 0 : mouseTilt.y),
+                    scale:
+                      activeStep === 3 && stage4Notified && !shouldReduceMotion
+                        ? [currentPose.scale, currentPose.scale * 1.05, currentPose.scale * 0.99, currentPose.scale]
+                        : currentPose.scale,
+                  }}
+                  transition={{
+                    type: 'spring',
+                    stiffness: 100,
+                    damping: 18,
+                    mass: 0.8,
+                  }}
+                  style={{ transformStyle: 'preserve-3d' }}
+                  className="will-change-transform"
+                >
+                  {/* Phone Mockup Frame (Original Design & Dimensions) */}
                   <div className="relative w-[300px] sm:w-[320px] h-[610px] bg-charcoal-deep rounded-[44px] p-3 shadow-warm-xl border-4 border-charcoal/30 flex flex-col justify-between overflow-hidden">
                     {/* Phone Speaker Notch */}
                     <div className="absolute top-4 left-1/2 -translate-x-1/2 w-28 h-4 bg-charcoal rounded-full z-40 flex items-center justify-center">
@@ -815,8 +869,10 @@ export const ScrollStory: React.FC = () => {
                       <div className="w-24 h-1 bg-charcoal/30 rounded-full mx-auto mt-1" />
                     </div>
                   </div>
-                </div>
-              </div>
+                </motion.div>
+              </motion.div>
+            </div>
+          </div>
 
           {/* Step Navigation Dots for Quick Access & Keyboard Users */}
           <div className="flex justify-center items-center gap-2.5 mt-8">
