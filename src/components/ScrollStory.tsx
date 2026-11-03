@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useScroll, useReducedMotion } from 'framer-motion';
 import { Calendar, Bell, Check, MapPin, Clock, Search, ShieldCheck } from 'lucide-react';
 import { triggerConfetti } from '../utils/confetti';
-import { ThreeStoryCanvas } from './ThreeStoryCanvas';
 
 interface StoryStep {
   step: number;
@@ -350,16 +349,13 @@ export const ScrollStory: React.FC = () => {
               })}
             </div>
 
-            {/* Right Column: 3D Phone Mockup Container with Three.js WebGL Stage */}
-            <div className="lg:col-span-6 flex justify-center items-center relative min-h-[640px]" style={{ perspective: 1200 }}>
-              {/* Three.js 3D WebGL Background Canvas */}
-              <ThreeStoryCanvas activeStep={activeStep} mousePos={mouseTilt} />
-
+            {/* Right Column: 3D Phone Mockup Container */}
+            <div className="lg:col-span-6 flex justify-center items-center" style={{ perspective: 1200 }}>
               {/* Gentle idle float wrapper */}
               <motion.div
                 animate={!shouldReduceMotion && !isMobile ? { y: [0, -6, 0] } : { y: 0 }}
                 transition={{ repeat: Infinity, duration: 4.8, ease: 'easeInOut' }}
-                className="flex justify-center items-center relative z-10"
+                className="flex justify-center items-center"
               >
                 {/* 3D Transform pose & mouse parallax container */}
                 <motion.div
