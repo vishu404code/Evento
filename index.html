@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23C4623A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='18' height='18' x='3' y='4' rx='3' ry='3'/><line x1='16' x2='16' y1='2' y2='6'/><line x1='8' x2='8' y1='2' y2='6'/><line x1='3' x2='21' y1='10' y2='10'/><path d='m9 16 2 2 4-4'/></svg>" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EVENTO: every RU event in one place</title>
+    <meta name="description" content="Discover, plan, and never miss a Rishihood University event again. All RU, Newton, and club events in one searchable home." />
+    
+    <!-- Open Graph / Meta -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="EVENTO: every RU event in one place" />
+    <meta property="og:description" content="Stop losing events in WhatsApp chats. Browse cards, view colour-coded calendar, and set 1-tap reminders." />
+    <meta property="og:url" content="https://evento.rishihood.edu.in" />
+    
+    <!-- Google Fonts: Fraunces & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,400..700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  </head>
+  <body class="bg-beige text-charcoal font-sans antialiased selection:bg-terracotta/20 selection:text-terracotta-dark">
+    <!-- SVG Noise filter for subtle paper texture -->
+    <svg class="pointer-events-none fixed isolate z-50 opacity-[0.035] mix-blend-overlay w-full h-full inset-0" aria-hidden="true">
+      <filter id="grain">
+        <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch" />
+        <feColorMatrix type="matrix" values="0 0 0 0 0   0 0 0 0 0   0 0 0 0 0  0 0 0 1 0"/>
+      </filter>
+      <rect width="100%" height="100%" filter="url(#grain)" />
+    </svg>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
