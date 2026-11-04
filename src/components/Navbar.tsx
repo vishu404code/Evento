@@ -1,11 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, MapPin, Menu, X, ArrowUpRight } from 'lucide-react';
+import { Calendar, MapPin, Menu, X, ArrowUpRight, LogOut, LayoutDashboard } from 'lucide-react';
 import { NAV_LINKS } from '../constants/data';
+import { UserProfile } from '../types/auth';
 
-export const Navbar: React.FC = () => {
+interface NavbarProps {
+  user?: UserProfile | null;
+  onLogout?: () => void;
+  onNavigate?: (path: string) => void;
+}
+
+export const Navbar: React.FC<NavbarProps> = ({ user, onLogout, onNavigate }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<string>('hero');
+
+  const handleLinkClick = (e: React.MouseEvent, href: string) => {
+    if (href.startsWith('/')) {
+      e.preventDefault();
+      if (onNavigate) {
+        onNavigate(href);
+      } else {
+        window.location.href = href;
+      }
+    }
+  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -100,29 +118,86 @@ export const Navbar: React.FC = () => {
 
           {/* Action CTAs */}
           <div className="hidden md:flex items-center gap-3">
-            <a
-              href="/login"
-              className="px-4 py-2 text-sm font-semibold text-charcoal hover:text-terracotta border border-charcoal/20 hover:border-terracotta rounded-full transition-all duration-150 shadow-warm-sm bg-cream/80 hover:bg-cream"
-            >
-              Login
-            </a>
-            <a
-              href="/home"
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-cream bg-terracotta hover:bg-terracotta-dark rounded-full transition-all duration-200 shadow-warm hover:shadow-warm-lg hover:-translate-y-0.5 active:translate-y-0"
-            >
-              <span>Explore Events</span>
-              <ArrowUpRight className="w-4 h-4" />
-            </a>
+            {user ? (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onNavigate && onNavigate(user.role === 'ORGANIZER' ? '/organizer' : '/student')}
+                  className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-cream border border-beige-dark hover:border-terracotta/50 shadow-warm-sm transition-all group"
+                >
+                  <div className="w-6 h-6 rounded-full bg-terracotta text-cream flex items-center justify-center text-xs font-bold">
+                    {user.full_name ? user.full_name.charAt(0).toUpperCase() : 'U'}
+                  </div>
+                  <div className="text-left text-xs">
+                    <span className="font-bold text-charcoal block group-hover:text-terracotta leading-tight">
+                      {user.full_name.split(' ')[0]}
+                    </span>
+                    <span className="text-[10px] text-mutedbrown block leading-none">
+                      {user.role || 'Dashboard'}
+                    </span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onNavigate && onNavigate(user.role === 'ORGANIZER' ? '/organizer' : '/student')}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-cream bg-terracotta hover:bg-terracotta-dark rounded-full transition-all duration-200 shadow-warm hover:shadow-warm-lg hover:-translate-y-0.5 active:translate-y-0"
+                >
+                  <LayoutDashboard className="w-4 h-4" />
+                  <span>Open Portal</span>
+                </button>
+
+                {onLogout && (
+                  <button
+                    type="button"
+                    onClick={onLogout}
+                    title="Sign Out"
+                    className="p-2 text-mutedbrown hover:text-red-600 rounded-full hover:bg-beige-light transition-colors"
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={(e) => handleLinkClick(e, '/login')}
+                  className="px-4 py-2 text-sm font-semibold text-charcoal hover:text-terracotta border border-charcoal/20 hover:border-terracotta rounded-full transition-all duration-150 shadow-warm-sm bg-cream/80 hover:bg-cream"
+                >
+                  Login
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => handleLinkClick(e, '/login')}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-cream bg-terracotta hover:bg-terracotta-dark rounded-full transition-all duration-200 shadow-warm hover:shadow-warm-lg hover:-translate-y-0.5 active:translate-y-0"
+                >
+                  <span>Explore Events</span>
+                  <ArrowUpRight className="w-4 h-4" />
+                </button>
+              </>
+            )}
           </div>
 
           {/* Mobile hamburger button */}
           <div className="flex md:hidden items-center gap-2">
-            <a
-              href="/login"
-              className="px-3 py-1.5 text-xs font-semibold text-charcoal border border-charcoal/20 rounded-full bg-cream/70"
-            >
-              Login
-            </a>
+            {user ? (
+              <button
+                type="button"
+                onClick={() => onNavigate && onNavigate(user.role === 'ORGANIZER' ? '/organizer' : '/student')}
+                className="px-3 py-1.5 text-xs font-semibold text-terracotta border border-terracotta/40 rounded-full bg-cream/70"
+              >
+                Dashboard
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => handleLinkClick(e, '/login')}
+                className="px-3 py-1.5 text-xs font-semibold text-charcoal border border-charcoal/20 rounded-full bg-cream/70"
+              >
+                Login
+              </button>
+            )}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               type="button"
@@ -146,7 +221,10 @@ export const Navbar: React.FC = () => {
                 <a
                   key={link.label}
                   href={link.href}
-                  onClick={() => setMobileMenuOpen(false)}
+                  onClick={(e) => {
+                    setMobileMenuOpen(false);
+                    handleLinkClick(e, link.href);
+                  }}
                   className="px-3 py-2 text-sm font-medium text-charcoal hover:bg-beige rounded-xl transition-colors"
                 >
                   {link.label}

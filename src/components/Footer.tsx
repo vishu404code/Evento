@@ -2,9 +2,24 @@ import React from 'react';
 import { Calendar, MapPin, ArrowUp, Heart } from 'lucide-react';
 import { NAV_LINKS } from '../constants/data';
 
-export const Footer: React.FC = () => {
+interface FooterProps {
+  onNavigate?: (path: string) => void;
+}
+
+export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleLinkClick = (e: React.MouseEvent, href: string) => {
+    if (href.startsWith('/')) {
+      e.preventDefault();
+      if (onNavigate) {
+        onNavigate(href);
+      } else {
+        window.location.href = href;
+      }
+    }
   };
 
   return (
@@ -52,6 +67,7 @@ export const Footer: React.FC = () => {
                   <li key={link.label}>
                     <a
                       href={link.href}
+                      onClick={(e) => handleLinkClick(e, link.href)}
                       className="text-mutedbrown hover:text-terracotta transition-colors"
                     >
                       {link.label}
@@ -61,6 +77,7 @@ export const Footer: React.FC = () => {
                 <li>
                   <a
                     href="/login"
+                    onClick={(e) => handleLinkClick(e, '/login')}
                     className="text-mutedbrown hover:text-terracotta transition-colors"
                   >
                     Organizer Login
