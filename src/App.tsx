@@ -20,7 +20,8 @@ import { UserProfile, UserRole } from './types/auth';
 import { useAppRouter } from './utils/router';
 import { LoginView } from './components/auth/LoginView';
 import { OnboardingView } from './components/auth/OnboardingView';
-import { PortalWrapper } from './components/portal/PortalWrapper';
+import { StudentPortalIntegration } from './components/portal/StudentPortalIntegration';
+import { OrganizerPortalIntegration } from './components/portal/OrganizerPortalIntegration';
 
 export const App: React.FC = () => {
   const { route, navigate } = useAppRouter();
@@ -158,8 +159,7 @@ export const App: React.FC = () => {
   // 3. Student Portal Artifact Route
   if (route === '/student') {
     return (
-      <PortalWrapper
-        portalType="STUDENT"
+      <StudentPortalIntegration
         user={user}
         onLogout={handleLogout}
         onNavigateHome={() => navigate('/')}
@@ -171,8 +171,7 @@ export const App: React.FC = () => {
   // 4. Organizer Portal Artifact Route
   if (route === '/organizer') {
     return (
-      <PortalWrapper
-        portalType="ORGANIZER"
+      <OrganizerPortalIntegration
         user={user}
         onLogout={handleLogout}
         onNavigateHome={() => navigate('/')}

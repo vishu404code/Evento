@@ -3,15 +3,16 @@ import react from '@vitejs/plugin-react';
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  base: './',
+  base: '/',
   plugins: [
     react(),
     {
       name: 'spa-fallback',
       configureServer(server) {
         server.middlewares.use((req, _res, next) => {
-          const url = req.url ? req.url.split('?')[0] : '';
-          if (['/student', '/organizer', '/login', '/onboarding'].includes(url)) {
+          const rawUrl = req.url ? req.url.split('?')[0] : '';
+          const cleanUrl = rawUrl.replace(/\/+$/, '') || '/';
+          if (['/student', '/organizer', '/login', '/onboarding'].includes(cleanUrl)) {
             req.url = '/index.html';
           }
           next();
@@ -19,8 +20,9 @@ export default defineConfig({
       },
       configurePreviewServer(server) {
         server.middlewares.use((req, _res, next) => {
-          const url = req.url ? req.url.split('?')[0] : '';
-          if (['/student', '/organizer', '/login', '/onboarding'].includes(url)) {
+          const rawUrl = req.url ? req.url.split('?')[0] : '';
+          const cleanUrl = rawUrl.replace(/\/+$/, '') || '/';
+          if (['/student', '/organizer', '/login', '/onboarding'].includes(cleanUrl)) {
             req.url = '/index.html';
           }
           next();
