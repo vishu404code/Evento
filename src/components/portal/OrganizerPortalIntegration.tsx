@@ -19,10 +19,12 @@ export const OrganizerPortalIntegration: React.FC<OrganizerPortalIntegrationProp
   const [htmlContent, setHtmlContent] = useState<string>('');
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Absolute URL guaranteed to resolve to root /organizer.html regardless of pathname or trailing slashes
+  // Absolute URL properly resolved with deployment base path (e.g. /Evento/ on GitHub Pages)
+  const base = import.meta.env.BASE_URL || '/';
+  const cleanBase = base.endsWith('/') ? base : `${base}/`;
   const artifactUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/organizer.html`
-    : '/organizer.html';
+    ? `${window.location.origin}${cleanBase}organizer.html`
+    : `${cleanBase}organizer.html`;
 
   // Role Access Guard: Organizer portal is restricted to ORGANIZER accounts
   const isAccessDenied = !user || user.role !== 'ORGANIZER';

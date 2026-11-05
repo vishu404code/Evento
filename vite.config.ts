@@ -1,9 +1,11 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+const base = process.env.VERCEL === '1' ? '/' : '/Evento/';
+
 // https://vitejs.dev/config/
 export default defineConfig({
-  base: '/',
+  base,
   plugins: [
     react(),
     {
@@ -11,9 +13,9 @@ export default defineConfig({
       configureServer(server) {
         server.middlewares.use((req, _res, next) => {
           const rawUrl = req.url ? req.url.split('?')[0] : '';
-          const cleanUrl = rawUrl.replace(/\/+$/, '') || '/';
+          const cleanUrl = rawUrl.replace(/^\/Evento/, '').replace(/\/+$/, '') || '/';
           if (['/student', '/organizer', '/login', '/onboarding'].includes(cleanUrl)) {
-            req.url = '/index.html';
+            req.url = `${base}index.html`;
           }
           next();
         });
@@ -21,9 +23,9 @@ export default defineConfig({
       configurePreviewServer(server) {
         server.middlewares.use((req, _res, next) => {
           const rawUrl = req.url ? req.url.split('?')[0] : '';
-          const cleanUrl = rawUrl.replace(/\/+$/, '') || '/';
+          const cleanUrl = rawUrl.replace(/^\/Evento/, '').replace(/\/+$/, '') || '/';
           if (['/student', '/organizer', '/login', '/onboarding'].includes(cleanUrl)) {
-            req.url = '/index.html';
+            req.url = `${base}index.html`;
           }
           next();
         });

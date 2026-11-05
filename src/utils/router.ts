@@ -2,15 +2,28 @@ import { useState, useEffect } from 'react';
 
 export type AppRoute = '/' | '/login' | '/onboarding' | '/student' | '/organizer';
 
+export function getBasePath(): string {
+  if (typeof window === 'undefined') return '';
+  return window.location.pathname.startsWith('/Evento') ? '/Evento' : '';
+}
+
 export function normalizeRoute(path: string): AppRoute {
-  // Support hash routing (e.g. #/student, #student) or pathname (/student)
+  // Support hash routing (e.g. #/student, #student) or pathname (/student or /Evento/student)
   let clean = path.split('?')[0].split('#')[0];
   if (path.includes('#')) {
     const hashPart = path.split('#')[1] || '';
     if (hashPart.startsWith('/')) {
       clean = hashPart.split('?')[0];
-    } else if (hashPart === 'student' || hashPart === 'organizer' || hashPart === 'login' || hashPart === 'onboarding') {
+    } else if (['student', 'organizer', 'login', 'onboarding'].includes(hashPart)) {
       clean = '/' + hashPart;
+    }
+  }
+
+  // Strip repository base prefix if present (e.g. /Evento/student -> /student)
+  if (clean.startsWith('/Evento')) {
+    clean = clean.substring('/Evento'.length);
+    if (!clean.startsWith('/')) {
+      clean = '/' + clean;
     }
   }
 
@@ -43,9 +56,11 @@ export function getCurrentRoute(): AppRoute {
 export function navigate(to: string): void {
   if (typeof window === 'undefined') return;
   const targetRoute = normalizeRoute(to);
+  const basePath = getBasePath();
+  const fullPath = targetRoute === '/' ? `${basePath}/` : `${basePath}${targetRoute}`;
   
   // Update browser history
-  window.history.pushState({}, '', targetRoute);
+  window.history.pushState({}, '', fullPath);
   
   // Dispatch custom popstate event so listeners update
   window.dispatchEvent(new PopStateEvent('popstate'));
@@ -73,4 +88,3 @@ export function useAppRouter() {
     navigate,
   };
 }
-
