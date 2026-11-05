@@ -12,7 +12,6 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({ user, onLogout, onNavigate }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState<string>('hero');
 
   const handleLinkClick = (e: React.MouseEvent, href: string) => {
     if (href.startsWith('/')) {
@@ -28,22 +27,6 @@ export const Navbar: React.FC<NavbarProps> = ({ user, onLogout, onNavigate }) =>
   useEffect(() => {
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 20);
-
-      // Detect active section
-      const sections = ['hero', 'problem', 'story', 'features', 'faq'];
-      const scrollPos = window.scrollY + 120;
-
-      for (const sectionId of sections) {
-        const el = document.getElementById(sectionId);
-        if (el) {
-          const top = el.offsetTop;
-          const height = el.offsetHeight;
-          if (scrollPos >= top && scrollPos < top + height) {
-            setActiveSection(sectionId);
-            break;
-          }
-        }
-      }
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -81,40 +64,6 @@ export const Navbar: React.FC<NavbarProps> = ({ user, onLogout, onNavigate }) =>
               </div>
             </div>
           </a>
-
-          {/* Desktop Navigation Links */}
-          <nav className="hidden md:flex items-center gap-1 bg-cream/70 backdrop-blur-sm px-3 py-1.5 rounded-full border border-beige-dark/50 shadow-warm-sm" aria-label="Main navigation">
-            {NAV_LINKS.map((link) => (
-              <a
-                key={link.label}
-                href={link.href}
-                className="px-4 py-1.5 text-sm font-medium text-charcoal/80 hover:text-terracotta rounded-full transition-colors duration-150 hover:bg-beige/60"
-              >
-                {link.label}
-              </a>
-            ))}
-            <div className="w-[1px] h-4 bg-beige-dark/60 mx-1" />
-            <a
-              href="#story"
-              className={`px-3.5 py-1.5 text-sm font-medium rounded-full transition-all duration-150 ${
-                activeSection === 'story'
-                  ? 'text-terracotta font-semibold bg-terracotta-soft/50'
-                  : 'text-mutedbrown hover:text-charcoal'
-              }`}
-            >
-              Experience
-            </a>
-            <a
-              href="#faq"
-              className={`px-3.5 py-1.5 text-sm font-medium rounded-full transition-all duration-150 ${
-                activeSection === 'faq'
-                  ? 'text-terracotta font-semibold bg-terracotta-soft/50'
-                  : 'text-mutedbrown hover:text-charcoal'
-              }`}
-            >
-              FAQ
-            </a>
-          </nav>
 
           {/* Action CTAs */}
           <div className="hidden md:flex items-center gap-3">
