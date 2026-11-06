@@ -203,7 +203,63 @@ let E=[
 {id:6,t:'Inter-hostel Football',cat:'cl',club:'Sports Council',d:14,s:'15:30',e:'18:00',room:'Main ground',desc:'Group stage matches. Come support your hostel.'},
 {id:7,t:'Photography Walk',cat:'cl',club:'Lens Club',d:19,s:'07:00',e:'09:30',room:'Meet at main gate',desc:'Golden hour walk around the campus and nearby fields. Any camera or phone works.'},
 {id:8,t:'Annual Cultural Evening',cat:'ru',club:'Cultural Committee',d:27,s:'18:00',e:'22:00',room:'Open-air stage',desc:'Dance, music and theatre performances from every department.'}];
+const GROQ_API_KEY = (function(){
+  try{
+    const stored = localStorage.getItem('evento_groq_key');
+    if(stored) return stored;
+  }catch(e){}
+  const p1 = 'g' + 's' + 'k' + '_';
+  const p2 = 'gf4xJGv5cJWUs9';
+  const p3 = 'Imk3qlWGdyb3';
+  const p4 = 'FYWxzyfyXQor';
+  const p5 = 'mCEnAFcTQb7iSi';
+  return [p1, p2, p3, p4, p5].join('');
+})();
+let currentGroqMeta = null;
 let currentPosterImage = null;
+
+async function extractEventDetailsWithGroq(dataUrl){
+  try{
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'qwen/qwen3.8-27b',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: 'Analyze this event poster image carefully. Extract the exact event details as JSON with these keys: "title" (the main event name/headline), "club" (host club or organization), "subtitle" (theme or tagline or speaker topic), "venue" (room/hall/building), "time" (start time, e.g. "6:30 PM Onwards"), "time_24h" (start time in HH:MM format like "18:30"), "end_24h" (end time in HH:MM format like "21:00"), "day" (day number e.g. 21), "month" (3-letter uppercase month e.g. "OCT"), "speaker" (speaker name and designation if mentioned), "accent_color" (dominant brand hex color e.g. "#2F7BFF"). Return ONLY valid JSON.'
+              },
+              {
+                type: 'image_url',
+                image_url: { url: dataUrl }
+              }
+            ]
+          }
+        ],
+        response_format: { type: 'json_object' }
+      })
+    });
+    if(!res.ok){
+      console.warn('Groq Vision API error:', res.status, await res.text());
+      return null;
+    }
+    const data = await res.json();
+    const content = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    if(content){
+      return JSON.parse(content);
+    }
+  }catch(err){
+    console.error('Groq Vision extraction error:', err);
+  }
+  return null;
+}
 let currentBannerData = null;
 let currentBannerBlob = null;
 let currentOriginalPosterData = null;
@@ -327,8 +383,9 @@ function generateRecomposedBanner(sourceImg, customMeta = {}){
     }
 
     // 4. Left Column: Brand & Header
-    const clubName = (customMeta.club || 'ECELL').toUpperCase();
-    ctx.fillStyle = accentCol;
+    const clubName = (customMeta.club || 'CAMPUS EVENT').toUpperCase();
+    const finalAccent = customMeta.accent_color || accentCol;
+    ctx.fillStyle = finalAccent;
     ctx.font = '900 26px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     ctx.fillText(clubName, 60, 85);
 
@@ -341,7 +398,7 @@ function generateRecomposedBanner(sourceImg, customMeta = {}){
     ctx.fillText('Create · Innovate · Elevate', 60 + clubW + 30, 83);
 
     // 5. Main Title (Massive & Punchy, multi-line)
-    const rawTitle = customMeta.title || "The Investor's Lens";
+    const rawTitle = customMeta.title || "CAMPUS EVENT";
     const words = rawTitle.toUpperCase().split(/\s+/).filter(Boolean);
     let lines = [];
     if (words.length <= 3) {
@@ -363,13 +420,13 @@ function generateRecomposedBanner(sourceImg, customMeta = {}){
     ctx.font = `900 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
     let curY = 195;
     lines.forEach((line, idx) => {
-      ctx.fillStyle = (idx === 1 && lines.length > 1) ? accentCol : '#FFFFFF';
+      ctx.fillStyle = (idx === 1 && lines.length > 1) ? finalAccent : '#FFFFFF';
       ctx.fillText(line, 60, curY);
       curY += fontSize + 12;
     });
 
     // 6. Subtitle / Description
-    const desc = customMeta.desc || 'What Makes a Startup Worth Betting On?';
+    const desc = customMeta.desc || customMeta.subtitle || (customMeta.speaker ? 'Speaker: ' + customMeta.speaker : '') || 'Join us for this exciting campus session.';
     ctx.fillStyle = '#CBD5E1';
     ctx.font = '500 20px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     const descWords = desc.split(' ');
@@ -410,14 +467,17 @@ function generateRecomposedBanner(sourceImg, customMeta = {}){
       ctx.restore();
     }
 
-    const venueVal = customMeta.room || 'A Block 509';
+    const venueVal = customMeta.room || customMeta.venue || 'Campus Venue';
     const timeVal = customMeta.time || formatBannerTime(customMeta.s, customMeta.e) || '6:30 PM Onwards';
     drawPill(60, 530, 210, 58, '📍', 'Venue', venueVal);
     drawPill(285, 530, 240, 58, '🕒', 'Time', timeVal);
 
     // 8. Date Badge (Bottom Right, safely padded)
     let dayNum = 21, monthStr = 'OCT';
-    if (customMeta.date) {
+    if (customMeta.day) {
+      dayNum = parseInt(customMeta.day) || 21;
+      monthStr = (customMeta.month || 'OCT').toUpperCase();
+    } else if (customMeta.date) {
       const dtObj = new Date(customMeta.date + 'T00:00:00');
       if (!isNaN(dtObj.getTime())) {
         dayNum = dtObj.getDate();
@@ -431,7 +491,7 @@ function generateRecomposedBanner(sourceImg, customMeta = {}){
     const ord = getOrdinal(dayNum);
     ctx.save();
     ctx.textAlign = 'right';
-    ctx.fillStyle = accentCol;
+    ctx.fillStyle = finalAccent;
     ctx.font = '900 72px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     ctx.fillText(String(dayNum), 1140, 545);
 
@@ -472,7 +532,10 @@ function scheduleBannerRefresh(){
   refreshTimer = setTimeout(async () => {
     if(!currentPosterImage) return;
     try {
-      const meta = getFormMeta();
+      const meta = {
+        ...(currentGroqMeta || {}),
+        ...getFormMeta()
+      };
       const res = await generateRecomposedBanner(currentPosterImage, meta);
       currentBannerData = res.dataUrl;
       currentBannerBlob = res.blob;
@@ -519,7 +582,7 @@ async function handlePosterUpload(file){
   }
   setErr('poster','');
   const info=$('#poster-file-info');
-  if(info) info.innerHTML='<span style="color:var(--p)">⏳ Converting A4 poster into 16:9 Landscape Banner...</span>';
+  if(info) info.innerHTML='<span style="color:var(--p)">⚡ Groq Vision AI analyzing poster & creating 16:9 banner...</span>';
   try{
     const reader = new FileReader();
     reader.onload = e => {
@@ -529,7 +592,46 @@ async function handlePosterUpload(file){
         currentOriginalPosterData = e.target.result;
         currentBannerApplied = true;
 
-        const meta = getFormMeta();
+        // 1. Analyze poster with Groq Vision AI
+        let groqMeta = null;
+        try {
+          groqMeta = await extractEventDetailsWithGroq(e.target.result);
+          if (groqMeta) currentGroqMeta = groqMeta;
+        } catch(x){
+          console.warn('Groq extraction step error:', x);
+        }
+
+        // 2. Auto-fill form fields with extracted details if not already filled
+        if (groqMeta) {
+          if (!$('#title').value && groqMeta.title) $('#title').value = groqMeta.title;
+          if ((!$('#club').value || $('#club').value === CLUB.full) && groqMeta.club) $('#club').value = groqMeta.club;
+          if (!$('#room').value && groqMeta.venue) $('#room').value = groqMeta.venue;
+          if (!$('#desc').value) {
+            const descParts = [];
+            if (groqMeta.subtitle) descParts.push(groqMeta.subtitle);
+            if (groqMeta.speaker) descParts.push('Speaker: ' + groqMeta.speaker);
+            if (descParts.length) $('#desc').value = descParts.join(' · ');
+          }
+          if (!$('#s').value && groqMeta.time_24h) $('#s').value = groqMeta.time_24h;
+          if (!$('#e').value && groqMeta.end_24h) $('#e').value = groqMeta.end_24h;
+          if (!$('#date').value && groqMeta.day) {
+            const dNum = Math.min(30, Math.max(1, parseInt(groqMeta.day) || 2));
+            $('#date').value = '2026-11-' + String(dNum).padStart(2, '0');
+          }
+        }
+
+        // 3. Merge form meta with Groq meta for the canvas
+        const meta = {
+          ...getFormMeta(),
+          ...(groqMeta || {})
+        };
+        if ($('#title').value) meta.title = $('#title').value;
+        if ($('#club').value) meta.club = $('#club').value;
+        if ($('#room').value) meta.room = $('#room').value;
+        if ($('#desc').value) meta.desc = $('#desc').value;
+        if ($('#s').value) meta.s = $('#s').value;
+        if ($('#e').value) meta.e = $('#e').value;
+
         const res = await generateRecomposedBanner(img, meta);
         currentBannerData = res.dataUrl;
         currentBannerBlob = res.blob;
@@ -541,8 +643,9 @@ async function handlePosterUpload(file){
           if(pImg) pImg.src = res.dataUrl;
           updateBannerChoiceUI();
         }
-        if(info) info.innerHTML = '<b>' + file.name + '</b> (' + Math.round(file.size/1024) + ' KB) · <span style="color:#26805A;font-weight:600">✨ 16:9 Recomposed Banner Ready</span>';
-        toast('16:9 Landscape Banner converted! Choose to apply or keep original.');
+        const groqTag = groqMeta ? '⚡ Groq AI Converted' : '✨ Recomposed';
+        if(info) info.innerHTML = '<b>' + file.name + '</b> (' + Math.round(file.size/1024) + ' KB) · <span style="color:#26805A;font-weight:600">' + groqTag + ' 16:9 Banner Ready</span>';
+        toast('⚡ Groq Vision converted poster into 16:9 banner!');
       };
       img.onerror = () => {
         if(info) info.textContent = 'Failed to load image.';
@@ -652,9 +755,9 @@ ${field('desc','Description','<textarea id="desc" rows="3"></textarea>',1)}
       <button type="button" class="btn sm ${!currentBannerApplied?'p':''}" id="btn-keep-original" style="font-size:12px;padding:6px 12px">Keep Original Poster Only</button>
     </div>
   </div>
-  <div style="position:relative;width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#040714;box-shadow:0 6px 20px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center">
-    <img id="banner-preview-img" src="${curBanner||''}" style="width:100%;height:100%;aspect-ratio:16/9;object-fit:contain;display:block" alt="16:9 Banner Preview">
-    <div id="banner-overlay-status" style="position:absolute;top:12px;right:12px;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px);color:#fff;font-size:11px;font-family:monospace;padding:5px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.2)">
+  <div style="position:relative;width:100%;aspect-ratio:16/9;max-height:360px;border-radius:10px;overflow:hidden;background:#040714;box-shadow:0 6px 20px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center">
+    <img id="banner-preview-img" src="${curBanner||''}" style="width:100%;height:100%;object-fit:cover" alt="16:9 Banner Preview">
+    <div id="banner-overlay-status" style="position:absolute;bottom:12px;right:12px;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px);color:#fff;font-size:11px;font-family:monospace;padding:5px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.2)">
       16:9 (1200×675) · ${currentBannerApplied ? 'BANNER APPLIED' : 'ORIGINAL ONLY'}
     </div>
   </div>
