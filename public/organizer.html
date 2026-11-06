@@ -249,62 +249,6 @@ async function generateBannerWithGemini(dataUrl){
   }
 }
 
-const OPENROUTER_API_KEY = (function(){
-  try{
-    const stored = localStorage.getItem('evento_openrouter_key');
-    if(stored) return stored;
-  }catch(e){}
-  const p1 = 's' + 'k' + '-' + 'o' + 'r' + '-' + 'v' + '1' + '-';
-  const p2 = '7c4f08a7650d785a';
-  const p3 = 'f19070070e41236a';
-  const p4 = '7de4eef902f1c318';
-  const p5 = '27659306f89e5d5d';
-  return [p1, p2, p3, p4, p5].join('');
-})();
-
-async function generateBannerWithOpenRouter(dataUrl){
-  try{
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': location.origin,
-        'X-Title': 'Evento Banner Creator'
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash-image',
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: 'Redesign this A4 vertical event poster into a high-resolution 16:9 landscape website banner (1200x675). Expand the background to the sides seamlessly, keeping the subject, typography, and event details intact and uncropped.'
-              },
-              {
-                type: 'image_url',
-                image_url: { url: dataUrl }
-              }
-            ]
-          }
-        ]
-      })
-    });
-    const data = await res.json();
-    if(!res.ok){
-      return { ok: false, error: data.error ? data.error.message : 'OpenRouter limit reached' };
-    }
-    const msg = data.choices && data.choices[0] && data.choices[0].message;
-    if(msg && msg.images && msg.images[0]){
-      return { ok: true, imageUrl: msg.images[0] };
-    }
-    return { ok: false, error: 'No image output' };
-  }catch(err){
-    return { ok: false, error: err.message };
-  }
-}
-
 function generateCompleteUncroppedBanner(sourceImg){
   return new Promise((resolve, reject) => {
     const W = 1200, H = 675; // 16:9 Landscape standard
@@ -688,7 +632,7 @@ async function handlePosterUpload(file){
         currentOriginalPosterData = e.target.result;
         currentBannerApplied = true;
 
-        // 1. Try AI banner generation via Gemini or OpenRouter
+        // 1. Try AI banner generation via Google AI Studio Gemini Image API
         let aiBannerUrl = null;
         try {
           const geminiRes = await generateBannerWithGemini(e.target.result);
@@ -696,15 +640,6 @@ async function handlePosterUpload(file){
             aiBannerUrl = geminiRes.imageUrl;
           }
         } catch(x){}
-
-        if (!aiBannerUrl) {
-          try {
-            const aiRes = await generateBannerWithOpenRouter(e.target.result);
-            if (aiRes && aiRes.ok && aiRes.imageUrl) {
-              aiBannerUrl = aiRes.imageUrl;
-            }
-          } catch(x){}
-        }
 
         let resDataUrl = null;
         let resBlob = null;
