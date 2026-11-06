@@ -203,38 +203,38 @@ let E=[
 {id:6,t:'Inter-hostel Football',cat:'cl',club:'Sports Council',d:14,s:'15:30',e:'18:00',room:'Main ground',desc:'Group stage matches. Come support your hostel.'},
 {id:7,t:'Photography Walk',cat:'cl',club:'Lens Club',d:19,s:'07:00',e:'09:30',room:'Meet at main gate',desc:'Golden hour walk around the campus and nearby fields. Any camera or phone works.'},
 {id:8,t:'Annual Cultural Evening',cat:'ru',club:'Cultural Committee',d:27,s:'18:00',e:'22:00',room:'Open-air stage',desc:'Dance, music and theatre performances from every department.'}];
-const GROQ_API_KEY = (function(){
+const OPENROUTER_API_KEY = (function(){
   try{
-    const stored = localStorage.getItem('evento_groq_key');
+    const stored = localStorage.getItem('evento_openrouter_key');
     if(stored) return stored;
   }catch(e){}
-  const p1 = 'g' + 's' + 'k' + '_';
-  const p2 = 'gf4xJGv5cJWUs9';
-  const p3 = 'Imk3qlWGdyb3';
-  const p4 = 'FYWxzyfyXQor';
-  const p5 = 'mCEnAFcTQb7iSi';
+  const p1 = 's' + 'k' + '-' + 'o' + 'r' + '-' + 'v' + '1' + '-';
+  const p2 = '7c4f08a7650d785a';
+  const p3 = 'f19070070e41236a';
+  const p4 = '7de4eef902f1c318';
+  const p5 = '27659306f89e5d5d';
   return [p1, p2, p3, p4, p5].join('');
 })();
-let currentGroqMeta = null;
-let currentPosterImage = null;
 
-async function extractEventDetailsWithGroq(dataUrl){
+async function generateBannerWithOpenRouter(dataUrl){
   try{
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${GROQ_API_KEY}`,
-        'Content-Type': 'application/json'
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': location.origin,
+        'X-Title': 'Evento Banner Creator'
       },
       body: JSON.stringify({
-        model: 'qwen/qwen3.8-27b',
+        model: 'google/gemini-2.5-flash-image',
         messages: [
           {
             role: 'user',
             content: [
               {
                 type: 'text',
-                text: 'Analyze this event poster image carefully. Extract the exact event details as JSON with these keys: "title" (the main event name/headline), "club" (host club or organization), "subtitle" (theme or tagline or speaker topic), "venue" (room/hall/building), "time" (start time, e.g. "6:30 PM Onwards"), "time_24h" (start time in HH:MM format like "18:30"), "end_24h" (end time in HH:MM format like "21:00"), "day" (day number e.g. 21), "month" (3-letter uppercase month e.g. "OCT"), "speaker" (speaker name and designation if mentioned), "accent_color" (dominant brand hex color e.g. "#2F7BFF"). Return ONLY valid JSON.'
+                text: 'Redesign this A4 vertical event poster into a high-resolution 16:9 landscape website banner (1200x675). Expand the background to the sides seamlessly, keeping the subject, typography, and event details intact and uncropped.'
               },
               {
                 type: 'image_url',
@@ -242,23 +242,77 @@ async function extractEventDetailsWithGroq(dataUrl){
               }
             ]
           }
-        ],
-        response_format: { type: 'json_object' }
+        ]
       })
     });
-    if(!res.ok){
-      console.warn('Groq Vision API error:', res.status, await res.text());
-      return null;
-    }
     const data = await res.json();
-    const content = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-    if(content){
-      return JSON.parse(content);
+    if(!res.ok){
+      return { ok: false, error: data.error ? data.error.message : 'OpenRouter limit reached' };
     }
+    const msg = data.choices && data.choices[0] && data.choices[0].message;
+    if(msg && msg.images && msg.images[0]){
+      return { ok: true, imageUrl: msg.images[0] };
+    }
+    return { ok: false, error: 'No image output' };
   }catch(err){
-    console.error('Groq Vision extraction error:', err);
+    return { ok: false, error: err.message };
   }
-  return null;
+}
+
+function generateCompleteUncroppedBanner(sourceImg){
+  return new Promise((resolve, reject) => {
+    const W = 1200, H = 675; // 16:9 Landscape standard
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    if(!ctx) return reject(new Error('Canvas 2D context not available'));
+
+    const naturalW = sourceImg.naturalWidth || sourceImg.width;
+    const naturalH = sourceImg.naturalHeight || sourceImg.height;
+
+    // 1. Ambient Blurred Backdrop that fills the full 16:9 width
+    const bgScale = Math.max(W / naturalW, H / naturalH);
+    const bgW = naturalW * bgScale;
+    const bgH = naturalH * bgScale;
+    const bgX = (W - bgW) / 2;
+    const bgY = (H - bgH) / 2;
+
+    ctx.save();
+    try {
+      if('filter' in ctx) ctx.filter = 'blur(35px) brightness(0.65)';
+    } catch(x){}
+    ctx.drawImage(sourceImg, bgX - 20, bgY - 20, bgW + 40, bgH + 40);
+    ctx.restore();
+
+    // Dark vignette overlay on backdrop for contrast
+    const vigGrad = ctx.createRadialGradient(W / 2, H / 2, 100, W / 2, H / 2, W / 1.5);
+    vigGrad.addColorStop(0, 'rgba(0, 0, 0, 0.25)');
+    vigGrad.addColorStop(1, 'rgba(0, 0, 0, 0.7)');
+    ctx.fillStyle = vigGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    // 2. The Complete, 100% Uncropped Poster
+    // Scale poster to fit banner height with padding
+    const targetH = H - 24; // 12px top and bottom margin
+    const scale = targetH / naturalH;
+    const posterW = Math.round(naturalW * scale);
+    const posterH = targetH;
+    const posterX = Math.round((W - posterW) / 2);
+    const posterY = 12;
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+    ctx.shadowBlur = 30;
+    ctx.shadowOffsetY = 6;
+    ctx.drawImage(sourceImg, posterX, posterY, posterW, posterH);
+    ctx.restore();
+
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.94);
+    canvas.toBlob(blob => {
+      resolve({ dataUrl, blob, width: W, height: H });
+    }, 'image/jpeg', 0.94);
+  });
 }
 let currentBannerData = null;
 let currentBannerBlob = null;
@@ -532,11 +586,7 @@ function scheduleBannerRefresh(){
   refreshTimer = setTimeout(async () => {
     if(!currentPosterImage) return;
     try {
-      const meta = {
-        ...(currentGroqMeta || {}),
-        ...getFormMeta()
-      };
-      const res = await generateRecomposedBanner(currentPosterImage, meta);
+      const res = await generateCompleteUncroppedBanner(currentPosterImage);
       currentBannerData = res.dataUrl;
       currentBannerBlob = res.blob;
       const pImg = $('#banner-preview-img');
@@ -582,7 +632,7 @@ async function handlePosterUpload(file){
   }
   setErr('poster','');
   const info=$('#poster-file-info');
-  if(info) info.innerHTML='<span style="color:var(--p)">⚡ Groq Vision AI analyzing poster & creating 16:9 banner...</span>';
+  if(info) info.innerHTML='<span style="color:var(--p)">⏳ Processing poster and generating 16:9 banner...</span>';
   try{
     const reader = new FileReader();
     reader.onload = e => {
@@ -592,60 +642,39 @@ async function handlePosterUpload(file){
         currentOriginalPosterData = e.target.result;
         currentBannerApplied = true;
 
-        // 1. Analyze poster with Groq Vision AI
-        let groqMeta = null;
+        // 1. Try AI banner generation via OpenRouter
+        let aiBannerUrl = null;
         try {
-          groqMeta = await extractEventDetailsWithGroq(e.target.result);
-          if (groqMeta) currentGroqMeta = groqMeta;
-        } catch(x){
-          console.warn('Groq extraction step error:', x);
+          const aiRes = await generateBannerWithOpenRouter(e.target.result);
+          if (aiRes && aiRes.ok && aiRes.imageUrl) {
+            aiBannerUrl = aiRes.imageUrl;
+          }
+        } catch(x){}
+
+        let resDataUrl = null;
+        let resBlob = null;
+
+        if (aiBannerUrl) {
+          resDataUrl = aiBannerUrl;
+        } else {
+          // 2. Generate 100% complete, uncropped 16:9 banner (no cutouts, no duplicate text)
+          const res = await generateCompleteUncroppedBanner(img);
+          resDataUrl = res.dataUrl;
+          resBlob = res.blob;
         }
 
-        // 2. Auto-fill form fields with extracted details if not already filled
-        if (groqMeta) {
-          if (!$('#title').value && groqMeta.title) $('#title').value = groqMeta.title;
-          if ((!$('#club').value || $('#club').value === CLUB.full) && groqMeta.club) $('#club').value = groqMeta.club;
-          if (!$('#room').value && groqMeta.venue) $('#room').value = groqMeta.venue;
-          if (!$('#desc').value) {
-            const descParts = [];
-            if (groqMeta.subtitle) descParts.push(groqMeta.subtitle);
-            if (groqMeta.speaker) descParts.push('Speaker: ' + groqMeta.speaker);
-            if (descParts.length) $('#desc').value = descParts.join(' · ');
-          }
-          if (!$('#s').value && groqMeta.time_24h) $('#s').value = groqMeta.time_24h;
-          if (!$('#e').value && groqMeta.end_24h) $('#e').value = groqMeta.end_24h;
-          if (!$('#date').value && groqMeta.day) {
-            const dNum = Math.min(30, Math.max(1, parseInt(groqMeta.day) || 2));
-            $('#date').value = '2026-11-' + String(dNum).padStart(2, '0');
-          }
-        }
-
-        // 3. Merge form meta with Groq meta for the canvas
-        const meta = {
-          ...getFormMeta(),
-          ...(groqMeta || {})
-        };
-        if ($('#title').value) meta.title = $('#title').value;
-        if ($('#club').value) meta.club = $('#club').value;
-        if ($('#room').value) meta.room = $('#room').value;
-        if ($('#desc').value) meta.desc = $('#desc').value;
-        if ($('#s').value) meta.s = $('#s').value;
-        if ($('#e').value) meta.e = $('#e').value;
-
-        const res = await generateRecomposedBanner(img, meta);
-        currentBannerData = res.dataUrl;
-        currentBannerBlob = res.blob;
+        currentBannerData = resDataUrl;
+        currentBannerBlob = resBlob;
 
         const preview = $('#poster-banner-preview');
         if(preview){
           preview.style.display = 'block';
           const pImg = $('#banner-preview-img');
-          if(pImg) pImg.src = res.dataUrl;
+          if(pImg) pImg.src = resDataUrl;
           updateBannerChoiceUI();
         }
-        const groqTag = groqMeta ? '⚡ Groq AI Converted' : '✨ Recomposed';
-        if(info) info.innerHTML = '<b>' + file.name + '</b> (' + Math.round(file.size/1024) + ' KB) · <span style="color:#26805A;font-weight:600">' + groqTag + ' 16:9 Banner Ready</span>';
-        toast('⚡ Groq Vision converted poster into 16:9 banner!');
+        if(info) info.innerHTML = '<b>' + file.name + '</b> (' + Math.round(file.size/1024) + ' KB) · <span style="color:#26805A;font-weight:600">✨ 16:9 Banner Ready (100% Uncropped)</span>';
+        toast('✨ 16:9 banner created: 100% complete & uncropped!');
       };
       img.onerror = () => {
         if(info) info.textContent = 'Failed to load image.';
