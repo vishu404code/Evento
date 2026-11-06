@@ -203,6 +203,138 @@ let E=[
 {id:6,t:'Inter-hostel Football',cat:'cl',club:'Sports Council',d:14,s:'15:30',e:'18:00',room:'Main ground',desc:'Group stage matches. Come support your hostel.'},
 {id:7,t:'Photography Walk',cat:'cl',club:'Lens Club',d:19,s:'07:00',e:'09:30',room:'Meet at main gate',desc:'Golden hour walk around the campus and nearby fields. Any camera or phone works.'},
 {id:8,t:'Annual Cultural Evening',cat:'ru',club:'Cultural Committee',d:27,s:'18:00',e:'22:00',room:'Open-air stage',desc:'Dance, music and theatre performances from every department.'}];
+let currentBannerData = null;
+let currentBannerBlob = null;
+let currentOriginalPosterData = null;
+let currentBannerApplied = true;
+try{
+  const saved = localStorage.getItem('evento_published_events');
+  if(saved){
+    const arr = JSON.parse(saved);
+    if(Array.isArray(arr) && arr.length) E = arr;
+  }
+}catch(e){}
+function saveCustomEvents(){
+  try{
+    localStorage.setItem('evento_published_events', JSON.stringify(E));
+  }catch(e){}
+}
+function generateBlurryMirrorBanner(file){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        const canvas=document.createElement('canvas');
+        canvas.width=1200;
+        canvas.height=400;
+        const ctx=canvas.getContext('2d');
+        const origW=img.naturalWidth||img.width;
+        const origH=img.naturalHeight||img.height;
+        const ratio=origW/origH;
+        const fgH=400;
+        const fgW=Math.round(fgH*ratio);
+        const fgX=Math.round((1200-fgW)/2);
+        
+        // Universal Cross-Browser Blur Fallback (works across Safari, Chrome, Firefox, iOS, Mac)
+        const blurCanvas=document.createElement('canvas');
+        blurCanvas.width=60;
+        blurCanvas.height=20;
+        const bCtx=blurCanvas.getContext('2d');
+        bCtx.imageSmoothingEnabled=true;
+        bCtx.drawImage(img,0,0,60,20);
+        
+        ctx.save();
+        ctx.imageSmoothingEnabled=true;
+        try{
+          if('filter' in ctx){
+            ctx.filter='blur(25px)';
+          }
+        }catch(x){}
+        ctx.drawImage(blurCanvas,-30,-30,1260,460);
+        ctx.restore();
+        
+        ctx.fillStyle='rgba(0,0,0,0.22)';
+        ctx.fillRect(0,0,1200,400);
+        
+        ctx.save();
+        ctx.shadowColor='rgba(0,0,0,0.55)';
+        ctx.shadowBlur=25;
+        ctx.shadowOffsetX=0;
+        ctx.shadowOffsetY=4;
+        ctx.drawImage(img,fgX,0,fgW,fgH);
+        ctx.restore();
+        
+        const dataUrl=canvas.toDataURL('image/jpeg',0.92);
+        canvas.toBlob(blob=>{
+          resolve({dataUrl,blob,width:1200,height:400,originalDataUrl:e.target.result});
+        },'image/jpeg',0.92);
+      };
+      img.onerror=()=>reject(new Error('Failed to load image'));
+      img.src=e.target.result;
+    };
+    reader.onerror=()=>reject(new Error('Failed to read file'));
+    reader.readAsDataURL(file);
+  });
+}
+function updateBannerChoiceUI(){
+  const btnApply = $('#btn-apply-banner');
+  const btnKeep = $('#btn-keep-original');
+  const lbl = $('#banner-choice-label');
+  const overlay = $('#banner-overlay-status');
+  if(btnApply){
+    btnApply.classList.toggle('p', currentBannerApplied);
+    btnApply.style.opacity = currentBannerApplied ? '1' : '0.7';
+  }
+  if(btnKeep){
+    btnKeep.classList.toggle('p', !currentBannerApplied);
+    btnKeep.style.opacity = !currentBannerApplied ? '1' : '0.7';
+  }
+  if(lbl){
+    lbl.innerHTML = currentBannerApplied 
+      ? '<span style="color:#26805A;font-weight:600">✓ 1200×400 Banner will be applied</span>'
+      : '<span style="color:var(--tx);font-weight:600">Original portrait poster only</span>';
+  }
+  if(overlay){
+    overlay.textContent = '1200 × 400 · ' + (currentBannerApplied ? 'BANNER APPLIED' : 'ORIGINAL ONLY');
+    overlay.style.borderColor = currentBannerApplied ? '#26805A' : 'rgba(255,255,255,0.2)';
+  }
+}
+async function handlePosterUpload(file){
+  if(!file)return;
+  if(!/^image\/(png|jpeg)$/.test(file.type)){
+    setErr('poster','Please select a JPG or PNG image');
+    return;
+  }
+  if(file.size > 5242880){
+    setErr('poster','Image must be under 5 MB');
+    return;
+  }
+  setErr('poster','');
+  const info=$('#poster-file-info');
+  if(info) info.innerHTML='<span style="color:var(--p)">⏳ Converting A4 poster to 1200×400 Blurry Mirror Banner...</span>';
+  try{
+    const res = await generateBlurryMirrorBanner(file);
+    currentBannerData = res.dataUrl;
+    currentBannerBlob = res.blob;
+    currentOriginalPosterData = res.originalDataUrl;
+    currentBannerApplied = true;
+    
+    const preview = $('#poster-banner-preview');
+    if(preview){
+      preview.style.display = 'block';
+      const img = $('#banner-preview-img');
+      if(img) img.src = res.dataUrl;
+      updateBannerChoiceUI();
+    }
+    if(info) info.innerHTML = '<b>' + file.name + '</b> (' + Math.round(file.size/1024) + ' KB) · <span style="color:#26805A;font-weight:600">✨ 1200×400 Banner Ready</span>';
+    toast('1200×400 banner converted! Choose to apply or keep original.');
+  }catch(err){
+    console.error('Banner conversion failed:', err);
+    if(info) info.textContent = 'Conversion failed. Please try another image.';
+    setErr('poster','Could not convert image to banner');
+  }
+}
 let st={role:'o',view:'home',f:new Set(['ru','nw','cl','pe']),rem:new Set([2,4]),sel:2,cal:'month',q:'',mine:new Set([9,11,12]),edit:null,email:null,gate:0};
 const $=s=>document.querySelector(s);
 const ic={my:'<path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>',home:'<path d="M3 11l9-8 9 8M5 10v10h14V10"/>',cal:'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>',up:'<path d="M12 16V4M7 9l5-5 5 5M4 20h16"/>',rem:'<path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/>',pin:'<path d="M12 21s7-6 7-11a7 7 0 10-14 0c0 5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',clk:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',cal2:'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18"/>'};
@@ -219,7 +351,7 @@ function nav(){const o=st.role==='o';const items=[['home','Home','home'],['cal',
 $('#nav').innerHTML=items.map(([k,l,i])=>`<button class="nav ${st.view===k?'on':''}" data-v="${k}">${I(i)}<span class="lb">${l}</span>${k==='rem'&&st.rem.size?`<span class="n lb">${st.rem.size}</span>`:''}</button>`).join('');
 $('#rl').textContent=o?'Organizer · '+CLUB.name:'Student';$('#dotb').style.display=st.rem.size?'block':'none'}
 function card(e){const c=CAT[e.cat],on=st.rem.has(e.id);
-return `<article class="ev" data-id="${e.id}"><div class="post" style="background:${c.h}"><span class="tag"><i class="dot" style="background:${c.h}"></i>${c.n}</span><div class="t">${e.t}</div></div>
+return `<article class="ev" data-id="${e.id}"><div class="post" style="background:${c.h};position:relative;overflow:hidden">${e.banner?`<img src="${e.banner}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0"><div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0.15) 0%,rgba(0,0,0,0.6) 100%);z-index:1;pointer-events:none"></div>`:''}<span class="tag" style="z-index:2"><i class="dot" style="background:${c.h}"></i>${c.n}</span><div class="t" style="z-index:2">${e.t}</div></div>
 <div class="eb"><div class="cl"><span class="logo" style="background:${c.h}">${ini(e.club)}</span>${e.club}</div><h3>${e.t}</h3><p>${e.desc}</p>
 <div class="meta"><span>${I('pin')}${e.room}</span><span>${I('clk')}${fd(e)}, ${e.s}</span></div>
 <button class="btn sm ${on?'on':''}" data-n="${e.id}">${I('rem')}${on?'Reminder set':'Notify me'}</button></div></article>`}
@@ -260,20 +392,56 @@ function rem(){const l=E.filter(e=>st.rem.has(e.id)).sort((a,b)=>dt(a)-dt(b));
 return `<div class="page"><h1 style="font-size:28px;margin-bottom:6px">My reminders</h1><p class="mut" style="margin-bottom:18px">You get a reminder before each of these starts.</p>${l.length?`<div class="grid">${l.map(card).join('')}</div>`:'<div class="empty">No reminders yet. Tap Notify on any event to add one.</div>'}</div>`}
 function field(id,l,inner,w){return `<div class="f ${w?'w':''}" id="f-${id}"><label for="${id}">${l}</label>${inner}<div class="e"></div></div>`}
 function upl(){const ed=st.edit;
+const curBanner=ed?(E.find(x=>x.id===ed)||{}).banner:currentBannerData;
 return `<div class="page"><div class="sec"><h1 style="font-size:28px">${ed?'Edit event':'Upload event'}</h1><span class="bx now">Verified RU email</span></div>
 <p class="mut" style="margin-bottom:18px">Your event goes live on Home and Calendar as soon as you publish.</p>
 <form id="uf" novalidate>${field('title','Event title','<input id="title">')}${field('club','Club name','<input id="club">')}
 ${field('room','Room or location','<input id="room">')}${field('cat','Category','<select id="cat"><option value="">Choose</option><option value="ru">RU event</option><option value="nw">Newton event</option><option value="cl">Club event</option></select>')}
 ${field('date','Date (November 2026)','<input id="date" type="date" min="2026-11-01" max="2026-11-30">')}<div class="f"><label>Start and end time</label><div style="display:flex;gap:8px"><input id="s" type="time" style="flex:1;padding:10px 12px;border:1px solid var(--bd);border-radius:10px;background:var(--card)"><input id="e" type="time" style="flex:1;padding:10px 12px;border:1px solid var(--bd);border-radius:10px;background:var(--card)"></div><div class="e" id="te"></div></div>
-${field('desc','Description','<textarea id="desc" rows="3"></textarea>',1)}${field('poster','Poster (JPG or PNG, under 500 KB)'+(ed?' · leave empty to keep current':''),'<input id="poster" type="file" accept="image/png,image/jpeg">')}${field('logo','Club logo'+(ed?' · leave empty to keep current':''),'<input id="logo" type="file" accept="image/png,image/jpeg">')}
+${field('desc','Description','<textarea id="desc" rows="3"></textarea>',1)}
+<div class="f w" id="f-poster">
+  <label for="poster">A4 Event Poster (Tall / Portrait) · Auto-converts to 1200×400 Banner${ed?' · leave empty to keep current':''}</label>
+  <div id="poster-dropzone" style="border:2px dashed var(--bd);border-radius:12px;padding:22px 16px;text-align:center;background:var(--card);cursor:pointer;transition:border-color .2s,background .2s;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
+    <div style="width:40px;height:40px;border-radius:50%;background:var(--hover);display:flex;align-items:center;justify-content:center;color:var(--p)">
+      <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center">
+      <label for="poster" class="btn sm p" style="cursor:pointer;margin:0;pointer-events:auto">Choose file</label>
+      <span class="mut" style="font-size:13px">or drag & drop your A4 poster here</span>
+    </div>
+    <input id="poster" type="file" accept="image/png,image/jpeg" style="display:none">
+    <span class="mut" id="poster-file-info" style="font-size:12px">Supports JPG or PNG (under 5 MB) · Automatically converted to 1200×400 Blurry Mirror Banner</span>
+  </div>
+  <div class="e"></div>
+</div>
+<div id="poster-banner-preview" style="${curBanner?'':'display:none;'}grid-column:1/-1;background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px;margin-bottom:8px">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="font-weight:700;font-size:14px">Generated 1200×400 Website Banner</span>
+      <span class="bx" style="background:#26805A;color:#fff;font-size:11px;padding:3px 8px;border-radius:6px">✨ Blurry Mirror Canvas</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span id="banner-choice-label" class="mut" style="font-size:12px">${currentBannerApplied?'✓ Banner will be applied':'Original poster will be kept'}</span>
+      <button type="button" class="btn sm ${currentBannerApplied?'p':''}" id="btn-apply-banner" style="font-size:12px;padding:6px 12px">Apply 1200×400 Banner</button>
+      <button type="button" class="btn sm ${!currentBannerApplied?'p':''}" id="btn-keep-original" style="font-size:12px;padding:6px 12px">Keep Original Poster Only</button>
+    </div>
+  </div>
+  <div style="position:relative;width:100%;aspect-ratio:3/1;max-height:240px;border-radius:10px;overflow:hidden;background:#0c0a09;box-shadow:0 4px 16px rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:center">
+    <img id="banner-preview-img" src="${curBanner||''}" style="width:100%;height:100%;object-fit:cover" alt="1200x400 Banner Preview">
+    <div id="banner-overlay-status" style="position:absolute;bottom:10px;right:10px;background:rgba(0,0,0,0.65);backdrop-filter:blur(4px);color:#fff;font-size:11px;font-family:monospace;padding:4px 8px;border-radius:6px;border:1px solid rgba(255,255,255,0.15)">
+      1200 × 400 · ${currentBannerApplied ? 'APPLIED' : 'ORIGINAL ONLY'}
+    </div>
+  </div>
+</div>
+${field('logo','Club logo'+(ed?' · leave empty to keep current':''),'<input id="logo" type="file" accept="image/png,image/jpeg">')}
 <div class="row" style="grid-column:1/-1;margin:0"><button class="btn p" type="submit">${ed?'Save changes':'Publish event'}</button>${ed?'<button class="btn" type="button" data-cx>Cancel</button>':''}</div></form></div>`}
-function fill(){const e=E.find(x=>x.id===st.edit);if(!e)return;const p=n=>String(n).padStart(2,'0');$('#title').value=e.t;$('#club').value=e.club;$('#room').value=e.room;$('#cat').value=e.cat;$('#date').value='2026-11-'+p(e.d);$('#s').value=e.s;$('#e').value=e.e;$('#desc').value=e.desc}
+function fill(){const e=E.find(x=>x.id===st.edit);if(!e)return;const p=n=>String(n).padStart(2,'0');$('#title').value=e.t;$('#club').value=e.club;$('#room').value=e.room;$('#cat').value=e.cat;$('#date').value='2026-11-'+p(e.d);$('#s').value=e.s;$('#e').value=e.e;$('#desc').value=e.desc;if(e.banner){currentBannerData=e.banner;currentBannerApplied=true;const pb=$('#poster-banner-preview');if(pb){pb.style.display='block';$('#banner-preview-img').src=e.banner;updateBannerChoiceUI()}}}
 function myev(){const l=E.filter(e=>st.mine.has(e.id)).sort((a,b)=>dt(a)-dt(b));
-const row=e=>`<div class="mr"><span class="bar" style="background:${CAT[e.cat].h}"></span><div class="ti" data-id="${e.id}"><b>${e.t}</b><span class="mut">${fd(e)}, ${ft(e)} · ${e.room}</span></div><span class="cat" style="color:${CAT[e.cat].h}">${CAT[e.cat].n}</span><button class="btn sm" data-ed="${e.id}">Edit</button><button class="btn sm" data-del="${e.id}" style="color:var(--er)">Delete</button></div>`;
+const row=e=>`<div class="mr"><span class="bar" style="background:${CAT[e.cat].h}"></span>${e.banner?`<img src="${e.banner}" style="width:54px;height:22px;border-radius:4px;object-fit:cover;margin-right:6px">`:''}<div class="ti" data-id="${e.id}"><b>${e.t}</b><span class="mut">${fd(e)}, ${ft(e)} · ${e.room}</span></div><span class="cat" style="color:${CAT[e.cat].h}">${CAT[e.cat].n}</span><button class="btn sm" data-ed="${e.id}">Edit</button><button class="btn sm" data-del="${e.id}" style="color:var(--er)">Delete</button></div>`;
 return `<div class="page"><div class="sec"><h1 style="font-size:28px">My events</h1><button class="btn p" data-v="up">${I('up')}Upload event</button></div><p class="mut" style="margin-bottom:18px">${l.length} published by you. Only you can edit or delete them.</p>${l.length?l.map(row).join(''):'<div class="empty">You have not published any events yet.</div>'}</div>`}
 function render(){nav();$('#v').innerHTML={home,cal:calv,rem,up:upl,my:myev}[st.view==='grid'?'home':st.view]();if(st.view==='up'){st.edit?fill():($('#club').value=CLUB.full)}const ch=render.lv!==st.view;render.lv=st.view;if(ch){const p=$('#v .page');p&&p.classList.add('enter')}window.scrollTo(0,ch?0:window.scrollY)}
 function open(id){const e=E.find(x=>x.id===id),c=CAT[e.cat],on=st.rem.has(id),own=st.mine.has(id);
-$('#sh').innerHTML=`<div class="post" style="background:${c.h}"><span class="tag"><i class="dot" style="background:${c.h}"></i>${c.n}</span><div class="t" style="font-size:30px">${e.t}</div><button class="x" data-x aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+$('#sh').innerHTML=`<div class="post" style="background:${c.h};position:relative;overflow:hidden">${e.banner?`<img src="${e.banner}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0"><div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0.15) 0%,rgba(0,0,0,0.6) 100%);z-index:1;pointer-events:none"></div>`:''}<span class="tag" style="z-index:2"><i class="dot" style="background:${c.h}"></i>${c.n}</span><div class="t" style="font-size:30px;z-index:2">${e.t}</div><button class="x" data-x aria-label="Close" style="z-index:3"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
 <div class="sb"><div class="cl"><span class="logo" style="background:${c.h}">${ini(e.club)}</span>${e.club}</div><p>${e.desc}</p>
 <div class="meta" style="font-size:14px"><span>${I('cal2')}${fd(e)}</span><span>${I('clk')}${ft(e)}</span><span>${I('pin')}${e.room}</span></div>
 <div class="row" style="margin:0"><button class="btn ${on?'on':'p'}" data-n="${e.id}">${I('rem')}${on?'Reminder set. Tap to cancel':'Notify me'}</button><button class="btn" data-sh="${e.id}">Copy link</button>${own?`<button class="btn" data-del="${e.id}" style="color:var(--er)">Delete event</button>`:''}</div></div>`;
@@ -284,23 +452,32 @@ function submit(){let ok=true;const v=i=>$('#'+i).value.trim(),chk=(i,m)=>{const
 chk('title','Enter a title');chk('club','Enter the club name');chk('room','Enter a room or location');chk('cat','Choose a category');chk('date','Pick a date');chk('desc','Add a short description');
 const d=new Date(v('date')+'T00:00');if(v('date')&&(d.getFullYear()!==2026||d.getMonth()!==10)){setErr('date','The calendar currently covers November 2026');ok=false}
 $('#te').textContent='';if(!v('s')||!v('e')){$('#te').textContent='Set start and end time';ok=false}else if(v('e')<=v('s')){$('#te').textContent='End time must be after start time';ok=false}
-for(const i of['poster','logo']){const f=$('#'+i).files[0];let m='';if(!f){if(!st.edit)m=i==='poster'?'Add a poster':'Add a club logo'}else if(!/^image\/(png|jpeg)$/.test(f.type))m='Use a JPG or PNG image';else if(f.size>512000)m='Image must be under 500 KB';setErr(i,m);if(m)ok=false}
-if(!ok)return;const f={t:v('title'),cat:v('cat'),club:v('club'),d:d.getDate(),s:v('s'),e:v('e'),room:v('room'),desc:v('desc')};
-if(st.edit){Object.assign(E.find(x=>x.id===st.edit),f);st.edit=null;toast('Event updated')}else{const e={id:Date.now(),...f};E.push(e);st.mine.add(e.id);toast('Published. It is live on Home and Calendar.')}
+for(const i of['poster','logo']){const f=$('#'+i).files?$('#'+i).files[0]:null;let m='';if(i==='poster'){if(!f&&!currentOriginalPosterData&&!currentBannerData&&!st.edit)m='Add a poster'}if(f){if(!/^image\/(png|jpeg)$/.test(f.type))m='Use a JPG or PNG image';else if(f.size>5242880)m='Image must be under 5 MB'}setErr(i,m);if(m)ok=false}
+if(!ok)return;
+const existingBanner = st.edit ? (E.find(x=>x.id===st.edit)||{}).banner : null;
+const existingPoster = st.edit ? (E.find(x=>x.id===st.edit)||{}).poster : null;
+const bannerToSave = currentBannerApplied ? (currentBannerData || existingBanner || null) : null;
+const posterToSave = currentOriginalPosterData || existingPoster || null;
+const f={t:v('title'),cat:v('cat'),club:v('club'),d:d.getDate(),s:v('s'),e:v('e'),room:v('room'),desc:v('desc'),banner:bannerToSave,poster:posterToSave};
+if(currentBannerApplied && currentBannerBlob){f.bannerBlob=currentBannerBlob;}
+if(st.edit){Object.assign(E.find(x=>x.id===st.edit),f);st.edit=null;currentBannerData=null;currentBannerBlob=null;currentOriginalPosterData=null;saveCustomEvents();toast('Event updated'+(bannerToSave?' with 1200×400 banner':''))}else{const e={id:Date.now(),...f};E.push(e);st.mine.add(e.id);currentBannerData=null;currentBannerBlob=null;currentOriginalPosterData=null;saveCustomEvents();toast('Published. Live on Home and Calendar'+(bannerToSave?' with 1200×400 banner.':''))}
 st.view='my';render()}
-document.addEventListener('click',ev=>{const t=ev.target.closest('[data-ed],[data-cx],[data-md],[data-v],[data-f],[data-n],[data-d],[data-cv],[data-id],[data-go],[data-x],[data-sh],[data-del],[data-pe],#out,#out2,#col,#cb,#ab,.modal');
+document.addEventListener('click',ev=>{const t=ev.target.closest('[data-ed],[data-cx],[data-md],[data-v],[data-f],[data-n],[data-d],[data-cv],[data-id],[data-go],[data-x],[data-sh],[data-del],[data-pe],#out,#out2,#col,#cb,#ab,#btn-apply-banner,#btn-keep-original,#poster-dropzone,.modal');
 if(!ev.target.closest('.av'))$('#dd').classList.remove('open');if(!t)return;const D=t.dataset;
 if(t.id==='ab')return $('#dd').classList.toggle('open');
+if(t.id==='btn-apply-banner'){currentBannerApplied=true;updateBannerChoiceUI();return toast('✓ 1200×400 banner applied')}
+if(t.id==='btn-keep-original'){currentBannerApplied=false;updateBannerChoiceUI();return toast('Original poster will be kept')}
+if(t.id==='poster-dropzone'||t.closest('#poster-dropzone')){if(ev.target.id!=='poster')$('#poster').click();return}
 if(t.classList.contains('modal')&&ev.target===t)return close();
 if(D.x!==undefined)return close();
 if(D.n){ev.stopPropagation();const id=+D.n;st.rem.has(id)?(st.rem.delete(id),toast('Reminder cancelled')):(st.rem.add(id),toast('Reminder set. We will notify you before it starts'));const o=$('#m').classList.contains('open');render();if(o)open(id);return}
 if(D.sh){navigator.clipboard&&navigator.clipboard.writeText(location.href.split('#')[0]+'#event-'+D.sh).catch(()=>{});return toast('Event link copied')}
-if(D.del){E=E.filter(e=>e.id!==+D.del);st.mine.delete(+D.del);st.rem.delete(+D.del);close();render();return toast('Event deleted')}
+if(D.del){E=E.filter(e=>e.id!==+D.del);st.mine.delete(+D.del);st.rem.delete(+D.del);saveCustomEvents();close();render();return toast('Event deleted')}
 if(D.pe!==undefined){const id=Date.now();E.push({id,t:'My study block',cat:'pe',club:'Personal',d:st.sel,s:'19:00',e:'21:00',room:'Library',desc:'Only you can see this.'});toast('Personal event added. Only you can see it');return render()}
 if(D.md){st.sel=+D.md;st.view='cal';st.cal='month';return render()}
 if(D.ed){st.edit=+D.ed;st.view='up';return render()}
-if(D.cx!==undefined){st.edit=null;st.view='my';return render()}
-if(D.v){if(D.v==='up')st.edit=null;st.view=D.v;return render()}
+if(D.cx!==undefined){st.edit=null;currentBannerData=null;currentBannerBlob=null;currentOriginalPosterData=null;st.view='my';return render()}
+if(D.v){if(D.v==='up'){st.edit=null;currentBannerData=null;currentBannerBlob=null;currentOriginalPosterData=null;}st.view=D.v;return render()}
 if(D.go){if(D.go==='grid'){st.view='home';render();return $('#grid').scrollIntoView({behavior:'smooth'})}st.view=D.go;return render()}
 if(D.f){st.f.has(D.f)?st.f.delete(D.f):st.f.add(D.f);return render()}
 if(D.d){st.sel=+D.d;return render()}
@@ -310,6 +487,10 @@ if(t.id==='cb'){st.view='rem';return render()}
 if(t.id==='col')return $('#sb').classList.toggle('c');
 if(t.id==='out'||t.id==='out2')return toast('Demo: logging out would end your session');
 });
+document.addEventListener('dragover',ev=>{const dz=ev.target.closest('#poster-dropzone');if(dz){ev.preventDefault();dz.style.borderColor='var(--p)';dz.style.background='var(--hover)'}});
+document.addEventListener('dragleave',ev=>{const dz=ev.target.closest('#poster-dropzone');if(dz&&!dz.contains(ev.relatedTarget)){dz.style.borderColor='var(--bd)';dz.style.background='var(--card)'}});
+document.addEventListener('drop',async ev=>{const dz=ev.target.closest('#poster-dropzone');if(dz){ev.preventDefault();dz.style.borderColor='var(--bd)';dz.style.background='var(--card)';if(ev.dataTransfer&&ev.dataTransfer.files&&ev.dataTransfer.files[0]){await handlePosterUpload(ev.dataTransfer.files[0])}}});
+document.addEventListener('change',async ev=>{if(ev.target&&ev.target.id==='poster'&&ev.target.files&&ev.target.files[0]){await handlePosterUpload(ev.target.files[0])}});
 document.addEventListener('submit',ev=>{ev.preventDefault();submit()});
 document.addEventListener('keydown',ev=>{if(ev.key==='Escape')close()});
 $('#q').addEventListener('input',e=>{st.q=e.target.value.trim().toLowerCase();if(!['home','cal'].includes(st.view))st.view='home';const f=document.activeElement;render();})
