@@ -203,6 +203,7 @@ let E=[
 {id:6,t:'Inter-hostel Football',cat:'cl',club:'Sports Council',d:14,s:'15:30',e:'18:00',room:'Main ground',desc:'Group stage matches. Come support your hostel.'},
 {id:7,t:'Photography Walk',cat:'cl',club:'Lens Club',d:19,s:'07:00',e:'09:30',room:'Meet at main gate',desc:'Golden hour walk around the campus and nearby fields. Any camera or phone works.'},
 {id:8,t:'Annual Cultural Evening',cat:'ru',club:'Cultural Committee',d:27,s:'18:00',e:'22:00',room:'Open-air stage',desc:'Dance, music and theatre performances from every department.'}];
+let currentPosterImage = null;
 let currentBannerData = null;
 let currentBannerBlob = null;
 let currentOriginalPosterData = null;
@@ -219,63 +220,274 @@ function saveCustomEvents(){
     localStorage.setItem('evento_published_events', JSON.stringify(E));
   }catch(e){}
 }
-function generateBlurryMirrorBanner(file){
-  return new Promise((resolve,reject)=>{
-    const reader=new FileReader();
-    reader.onload=e=>{
-      const img=new Image();
-      img.onload=()=>{
-        const canvas=document.createElement('canvas');
-        canvas.width=1200;
-        canvas.height=400;
-        const ctx=canvas.getContext('2d');
-        const origW=img.naturalWidth||img.width;
-        const origH=img.naturalHeight||img.height;
-        const ratio=origW/origH;
-        const fgH=400;
-        const fgW=Math.round(fgH*ratio);
-        const fgX=Math.round((1200-fgW)/2);
-        
-        // Universal Cross-Browser Blur Fallback (works across Safari, Chrome, Firefox, iOS, Mac)
-        const blurCanvas=document.createElement('canvas');
-        blurCanvas.width=60;
-        blurCanvas.height=20;
-        const bCtx=blurCanvas.getContext('2d');
-        bCtx.imageSmoothingEnabled=true;
-        bCtx.drawImage(img,0,0,60,20);
-        
-        ctx.save();
-        ctx.imageSmoothingEnabled=true;
-        try{
-          if('filter' in ctx){
-            ctx.filter='blur(25px)';
-          }
-        }catch(x){}
-        ctx.drawImage(blurCanvas,-30,-30,1260,460);
-        ctx.restore();
-        
-        ctx.fillStyle='rgba(0,0,0,0.22)';
-        ctx.fillRect(0,0,1200,400);
-        
-        ctx.save();
-        ctx.shadowColor='rgba(0,0,0,0.55)';
-        ctx.shadowBlur=25;
-        ctx.shadowOffsetX=0;
-        ctx.shadowOffsetY=4;
-        ctx.drawImage(img,fgX,0,fgW,fgH);
-        ctx.restore();
-        
-        const dataUrl=canvas.toDataURL('image/jpeg',0.92);
-        canvas.toBlob(blob=>{
-          resolve({dataUrl,blob,width:1200,height:400,originalDataUrl:e.target.result});
-        },'image/jpeg',0.92);
-      };
-      img.onerror=()=>reject(new Error('Failed to load image'));
-      img.src=e.target.result;
-    };
-    reader.onerror=()=>reject(new Error('Failed to read file'));
-    reader.readAsDataURL(file);
+function formatBannerTime(s, e){
+  if(!s) return '6:30 PM Onwards';
+  const parseT = t => {
+    if(!t) return '';
+    const [h,m] = t.split(':').map(Number);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const hr = h % 12 || 12;
+    return hr + (m ? ':' + String(m).padStart(2,'0') : ':00') + ' ' + ampm;
+  };
+  const st = parseT(s);
+  const et = parseT(e);
+  if(et) return st + ' - ' + et;
+  return st + ' Onwards';
+}
+function getOrdinal(d){
+  if(d > 3 && d < 21) return 'th';
+  switch(d % 10){
+    case 1: return 'st';
+    case 2: return 'nd';
+    case 3: return 'rd';
+    default: return 'th';
+  }
+}
+function generateRecomposedBanner(sourceImg, customMeta = {}){
+  return new Promise((resolve, reject) => {
+    const W = 1200, H = 675; // Standard 16:9 Landscape Banner
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    if(!ctx) return reject(new Error('Canvas 2D context not available'));
+
+    // Extract ambient colors from source image corners
+    let cTop = [4, 7, 20], cMid = [47, 123, 255];
+    try {
+      const sCan = document.createElement('canvas');
+      sCan.width = sourceImg.naturalWidth || sourceImg.width || 600;
+      sCan.height = sourceImg.naturalHeight || sourceImg.height || 800;
+      const sCtx = sCan.getContext('2d');
+      sCtx.drawImage(sourceImg, 0, 0);
+      const d1 = sCtx.getImageData(Math.min(20, sCan.width - 1), Math.min(20, sCan.height - 1), 1, 1).data;
+      const d2 = sCtx.getImageData(Math.max(1, sCan.width - 20), Math.round(sCan.height * 0.4), 1, 1).data;
+      cTop = [d1[0], d1[1], d1[2]];
+      cMid = [d2[0], d2[1], d2[2]];
+    } catch(e) {}
+
+    const colBack = `rgb(${cTop[0]}, ${cTop[1]}, ${cTop[2]})`;
+    const accentCol = customMeta.cat === 'ru' ? '#E5484D' : (customMeta.cat === 'cl' ? '#12B76A' : '#2F7BFF');
+
+    // 1. Dark ambient background gradient
+    const bgGrad = ctx.createLinearGradient(0, 0, W, H);
+    bgGrad.addColorStop(0, '#040714');
+    bgGrad.addColorStop(0.38, colBack);
+    bgGrad.addColorStop(1, '#050918');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    // 2. Vibrant ambient glow behind the subject on the right
+    const radGrad = ctx.createRadialGradient(880, 320, 40, 880, 320, 480);
+    radGrad.addColorStop(0, `rgba(${cMid[0]}, ${cMid[1]}, ${cMid[2]}, 0.5)`);
+    radGrad.addColorStop(0.55, 'rgba(18, 45, 120, 0.22)');
+    radGrad.addColorStop(1, 'rgba(4, 7, 20, 0)');
+    ctx.fillStyle = radGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    // 3. Subject / Artwork on the right
+    const naturalW = sourceImg.naturalWidth || sourceImg.width;
+    const naturalH = sourceImg.naturalHeight || sourceImg.height;
+    const isPortrait = naturalH >= naturalW;
+
+    if (isPortrait) {
+      const scale = H / (naturalH * 0.86);
+      const scaledW = naturalW * scale;
+      const scaledH = naturalH * scale;
+      const posX = W - (scaledW * 0.92);
+
+      const subCan = document.createElement('canvas');
+      subCan.width = W;
+      subCan.height = H;
+      const subCtx = subCan.getContext('2d');
+      subCtx.drawImage(sourceImg, posX, 0, scaledW, scaledH);
+
+      // Smooth alpha mask fade on left edge of subject
+      subCtx.globalCompositeOperation = 'destination-out';
+      const maskGrad = subCtx.createLinearGradient(posX - 40, 0, posX + (scaledW * 0.38), 0);
+      maskGrad.addColorStop(0, 'rgba(0, 0, 0, 1)');
+      maskGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      subCtx.fillStyle = maskGrad;
+      subCtx.fillRect(0, 0, W, H);
+
+      // Bottom blend
+      const botGrad = subCtx.createLinearGradient(0, H - 75, 0, H);
+      botGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      botGrad.addColorStop(1, 'rgba(0, 0, 0, 0.75)');
+      subCtx.fillStyle = botGrad;
+      subCtx.fillRect(0, 0, W, H);
+
+      ctx.drawImage(subCan, 0, 0);
+    } else {
+      const scale = Math.max(W / naturalW, H / naturalH);
+      const sw = naturalW * scale, sh = naturalH * scale;
+      const sx = (W - sw) / 2, sy = (H - sh) / 2;
+      ctx.drawImage(sourceImg, sx, sy, sw, sh);
+      const overGrad = ctx.createLinearGradient(0, 0, W * 0.65, 0);
+      overGrad.addColorStop(0, 'rgba(4, 7, 20, 0.95)');
+      overGrad.addColorStop(0.7, 'rgba(4, 7, 20, 0.7)');
+      overGrad.addColorStop(1, 'rgba(4, 7, 20, 0)');
+      ctx.fillStyle = overGrad;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    // 4. Left Column: Brand & Header
+    const clubName = (customMeta.club || 'ECELL').toUpperCase();
+    ctx.fillStyle = accentCol;
+    ctx.font = '900 28px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText(clubName, 60, 75);
+
+    const clubW = ctx.measureText(clubName).width;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+    ctx.fillRect(60 + clubW + 16, 56, 2, 22);
+
+    ctx.fillStyle = '#94A3B8';
+    ctx.font = '500 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('Create · Innovate · Elevate', 60 + clubW + 30, 74);
+
+    // 5. Main Title (Massive & Punchy, multi-line)
+    const rawTitle = customMeta.title || "The Investor's Lens";
+    const words = rawTitle.toUpperCase().split(/\s+/).filter(Boolean);
+    let lines = [];
+    if (words.length <= 3) {
+      lines = words;
+    } else if (words.length <= 6) {
+      lines = [
+        words.slice(0, Math.ceil(words.length / 2)).join(' '),
+        words.slice(Math.ceil(words.length / 2)).join(' ')
+      ];
+    } else {
+      lines = [
+        words.slice(0, 3).join(' '),
+        words.slice(3, 6).join(' '),
+        words.slice(6, 9).join(' ')
+      ];
+    }
+
+    const fontSize = lines.length >= 3 ? 60 : (lines.length === 2 ? 68 : 74);
+    ctx.font = `900 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+    let curY = 190;
+    lines.forEach((line, idx) => {
+      ctx.fillStyle = (idx === 1 && lines.length > 1) ? accentCol : '#FFFFFF';
+      ctx.fillText(line, 60, curY);
+      curY += fontSize + 14;
+    });
+
+    // 6. Subtitle / Description
+    const desc = customMeta.desc || 'What Makes a Startup Worth Betting On?';
+    ctx.fillStyle = '#CBD5E1';
+    ctx.font = '500 22px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    const descWords = desc.split(' ');
+    let dLine = '', dLines = [];
+    for (let n = 0; n < descWords.length; n++) {
+      const testLine = dLine + descWords[n] + ' ';
+      if (ctx.measureText(testLine).width > 520 && n > 0) {
+        dLines.push(dLine.trim());
+        dLine = descWords[n] + ' ';
+        if (dLines.length === 2) { dLines[1] += '...'; break; }
+      } else {
+        dLine = testLine;
+      }
+    }
+    if (dLine && dLines.length < 2) dLines.push(dLine.trim());
+    dLines.forEach((dl, i) => {
+      ctx.fillText(dl, 60, curY + 6 + (i * 30));
+    });
+
+    // 7. Pills: Venue & Time
+    function drawPill(x, y, w, h, icon, label, val) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
+      ctx.strokeStyle = 'rgba(47, 123, 255, 0.35)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(x, y, w, h, 24);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#64748B';
+      ctx.font = '600 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillText(label, x + 38, y + 23);
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = '700 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillText(val, x + 38, y + 44);
+      ctx.restore();
+    }
+
+    const venueVal = customMeta.room || 'A Block 509';
+    const timeVal = customMeta.time || formatBannerTime(customMeta.s, customMeta.e) || '6:30 PM Onwards';
+    drawPill(60, 520, 215, 64, '📍', 'Venue', venueVal);
+    drawPill(290, 520, 245, 64, '🕒', 'Time', timeVal);
+
+    // 8. Date Badge (Bottom Right)
+    let dayNum = 21, monthStr = 'OCT';
+    if (customMeta.date) {
+      const dtObj = new Date(customMeta.date + 'T00:00:00');
+      if (!isNaN(dtObj.getTime())) {
+        dayNum = dtObj.getDate();
+        monthStr = dtObj.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
+      }
+    } else if (customMeta.d) {
+      dayNum = customMeta.d;
+      monthStr = 'NOV';
+    }
+
+    const ord = getOrdinal(dayNum);
+    ctx.save();
+    ctx.textAlign = 'right';
+    ctx.fillStyle = accentCol;
+    ctx.font = '900 76px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText(String(dayNum), 1140, 560);
+
+    ctx.font = '700 24px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText(ord, 1166, 515);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '900 40px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText(monthStr, 1140, 615);
+    ctx.restore();
+
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    canvas.toBlob(blob => {
+      resolve({ dataUrl, blob, width: W, height: H });
+    }, 'image/jpeg', 0.92);
   });
+}
+function getFormMeta(){
+  const getV = id => {
+    const el = $('#' + id);
+    return el ? el.value.trim() : '';
+  };
+  return {
+    title: getV('title'),
+    club: getV('club'),
+    desc: getV('desc'),
+    room: getV('room'),
+    s: getV('s'),
+    e: getV('e'),
+    date: getV('date'),
+    cat: getV('cat')
+  };
+}
+let refreshTimer = null;
+function scheduleBannerRefresh(){
+  if(!currentPosterImage) return;
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(async () => {
+    if(!currentPosterImage) return;
+    try {
+      const meta = getFormMeta();
+      const res = await generateRecomposedBanner(currentPosterImage, meta);
+      currentBannerData = res.dataUrl;
+      currentBannerBlob = res.blob;
+      const pImg = $('#banner-preview-img');
+      if(pImg) pImg.src = res.dataUrl;
+      updateBannerChoiceUI();
+    } catch(e) {
+      console.error('Error refreshing banner:', e);
+    }
+  }, 150);
 }
 function updateBannerChoiceUI(){
   const btnApply = $('#btn-apply-banner');
@@ -292,11 +504,11 @@ function updateBannerChoiceUI(){
   }
   if(lbl){
     lbl.innerHTML = currentBannerApplied 
-      ? '<span style="color:#26805A;font-weight:600">✓ 1200×400 Banner will be applied</span>'
+      ? '<span style="color:#26805A;font-weight:600">✓ 16:9 Banner will be applied</span>'
       : '<span style="color:var(--tx);font-weight:600">Original portrait poster only</span>';
   }
   if(overlay){
-    overlay.textContent = '1200 × 400 · ' + (currentBannerApplied ? 'BANNER APPLIED' : 'ORIGINAL ONLY');
+    overlay.textContent = '16:9 (1200×675) · ' + (currentBannerApplied ? 'BANNER APPLIED' : 'ORIGINAL ONLY');
     overlay.style.borderColor = currentBannerApplied ? '#26805A' : 'rgba(255,255,255,0.2)';
   }
 }
@@ -312,23 +524,42 @@ async function handlePosterUpload(file){
   }
   setErr('poster','');
   const info=$('#poster-file-info');
-  if(info) info.innerHTML='<span style="color:var(--p)">⏳ Converting A4 poster to 1200×400 Blurry Mirror Banner...</span>';
+  if(info) info.innerHTML='<span style="color:var(--p)">⏳ Converting A4 poster into 16:9 Landscape Banner...</span>';
   try{
-    const res = await generateBlurryMirrorBanner(file);
-    currentBannerData = res.dataUrl;
-    currentBannerBlob = res.blob;
-    currentOriginalPosterData = res.originalDataUrl;
-    currentBannerApplied = true;
-    
-    const preview = $('#poster-banner-preview');
-    if(preview){
-      preview.style.display = 'block';
-      const img = $('#banner-preview-img');
-      if(img) img.src = res.dataUrl;
-      updateBannerChoiceUI();
-    }
-    if(info) info.innerHTML = '<b>' + file.name + '</b> (' + Math.round(file.size/1024) + ' KB) · <span style="color:#26805A;font-weight:600">✨ 1200×400 Banner Ready</span>';
-    toast('1200×400 banner converted! Choose to apply or keep original.');
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = async () => {
+        currentPosterImage = img;
+        currentOriginalPosterData = e.target.result;
+        currentBannerApplied = true;
+
+        const meta = getFormMeta();
+        const res = await generateRecomposedBanner(img, meta);
+        currentBannerData = res.dataUrl;
+        currentBannerBlob = res.blob;
+
+        const preview = $('#poster-banner-preview');
+        if(preview){
+          preview.style.display = 'block';
+          const pImg = $('#banner-preview-img');
+          if(pImg) pImg.src = res.dataUrl;
+          updateBannerChoiceUI();
+        }
+        if(info) info.innerHTML = '<b>' + file.name + '</b> (' + Math.round(file.size/1024) + ' KB) · <span style="color:#26805A;font-weight:600">✨ 16:9 Recomposed Banner Ready</span>';
+        toast('16:9 Landscape Banner converted! Choose to apply or keep original.');
+      };
+      img.onerror = () => {
+        if(info) info.textContent = 'Failed to load image.';
+        setErr('poster','Could not load image file');
+      };
+      img.src = e.target.result;
+    };
+    reader.onerror = () => {
+      if(info) info.textContent = 'Failed to read file.';
+      setErr('poster','Could not read file');
+    };
+    reader.readAsDataURL(file);
   }catch(err){
     console.error('Banner conversion failed:', err);
     if(info) info.textContent = 'Conversion failed. Please try another image.';
@@ -400,7 +631,7 @@ ${field('room','Room or location','<input id="room">')}${field('cat','Category',
 ${field('date','Date (November 2026)','<input id="date" type="date" min="2026-11-01" max="2026-11-30">')}<div class="f"><label>Start and end time</label><div style="display:flex;gap:8px"><input id="s" type="time" style="flex:1;padding:10px 12px;border:1px solid var(--bd);border-radius:10px;background:var(--card)"><input id="e" type="time" style="flex:1;padding:10px 12px;border:1px solid var(--bd);border-radius:10px;background:var(--card)"></div><div class="e" id="te"></div></div>
 ${field('desc','Description','<textarea id="desc" rows="3"></textarea>',1)}
 <div class="f w" id="f-poster">
-  <label for="poster">A4 Event Poster (Tall / Portrait) · Auto-converts to 1200×400 Banner${ed?' · leave empty to keep current':''}</label>
+  <label for="poster">A4 Event Poster (Tall / Portrait) · Auto-converts to 16:9 Banner${ed?' · leave empty to keep current':''}</label>
   <div id="poster-dropzone" style="border:2px dashed var(--bd);border-radius:12px;padding:22px 16px;text-align:center;background:var(--card);cursor:pointer;transition:border-color .2s,background .2s;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
     <div style="width:40px;height:40px;border-radius:50%;background:var(--hover);display:flex;align-items:center;justify-content:center;color:var(--p)">
       <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>
@@ -410,26 +641,26 @@ ${field('desc','Description','<textarea id="desc" rows="3"></textarea>',1)}
       <span class="mut" style="font-size:13px">or drag & drop your A4 poster here</span>
     </div>
     <input id="poster" type="file" accept="image/png,image/jpeg" style="display:none">
-    <span class="mut" id="poster-file-info" style="font-size:12px">Supports JPG or PNG (under 5 MB) · Automatically converted to 1200×400 Blurry Mirror Banner</span>
+    <span class="mut" id="poster-file-info" style="font-size:12px">Supports JPG or PNG (under 5 MB) · Automatically converted to 16:9 Landscape Banner</span>
   </div>
   <div class="e"></div>
 </div>
 <div id="poster-banner-preview" style="${curBanner?'':'display:none;'}grid-column:1/-1;background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px;margin-bottom:8px">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
     <div style="display:flex;align-items:center;gap:10px">
-      <span style="font-weight:700;font-size:14px">Generated 1200×400 Website Banner</span>
-      <span class="bx" style="background:#26805A;color:#fff;font-size:11px;padding:3px 8px;border-radius:6px">✨ Blurry Mirror Canvas</span>
+      <span style="font-weight:700;font-size:14px">Converted 16:9 Website Banner (1200×675)</span>
+      <span class="bx" style="background:#26805A;color:#fff;font-size:11px;padding:3px 8px;border-radius:6px">✨ Smart Landscape Recomposer</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px">
-      <span id="banner-choice-label" class="mut" style="font-size:12px">${currentBannerApplied?'✓ Banner will be applied':'Original poster will be kept'}</span>
-      <button type="button" class="btn sm ${currentBannerApplied?'p':''}" id="btn-apply-banner" style="font-size:12px;padding:6px 12px">Apply 1200×400 Banner</button>
+      <span id="banner-choice-label" class="mut" style="font-size:12px">${currentBannerApplied?'✓ 16:9 Banner will be applied':'Original poster will be kept'}</span>
+      <button type="button" class="btn sm ${currentBannerApplied?'p':''}" id="btn-apply-banner" style="font-size:12px;padding:6px 12px">Apply 16:9 Banner</button>
       <button type="button" class="btn sm ${!currentBannerApplied?'p':''}" id="btn-keep-original" style="font-size:12px;padding:6px 12px">Keep Original Poster Only</button>
     </div>
   </div>
-  <div style="position:relative;width:100%;aspect-ratio:3/1;max-height:240px;border-radius:10px;overflow:hidden;background:#0c0a09;box-shadow:0 4px 16px rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:center">
-    <img id="banner-preview-img" src="${curBanner||''}" style="width:100%;height:100%;object-fit:cover" alt="1200x400 Banner Preview">
-    <div id="banner-overlay-status" style="position:absolute;bottom:10px;right:10px;background:rgba(0,0,0,0.65);backdrop-filter:blur(4px);color:#fff;font-size:11px;font-family:monospace;padding:4px 8px;border-radius:6px;border:1px solid rgba(255,255,255,0.15)">
-      1200 × 400 · ${currentBannerApplied ? 'APPLIED' : 'ORIGINAL ONLY'}
+  <div style="position:relative;width:100%;aspect-ratio:16/9;max-height:360px;border-radius:10px;overflow:hidden;background:#040714;box-shadow:0 6px 20px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center">
+    <img id="banner-preview-img" src="${curBanner||''}" style="width:100%;height:100%;object-fit:cover" alt="16:9 Banner Preview">
+    <div id="banner-overlay-status" style="position:absolute;bottom:12px;right:12px;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px);color:#fff;font-size:11px;font-family:monospace;padding:5px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.2)">
+      16:9 (1200×675) · ${currentBannerApplied ? 'BANNER APPLIED' : 'ORIGINAL ONLY'}
     </div>
   </div>
 </div>
@@ -460,12 +691,12 @@ const bannerToSave = currentBannerApplied ? (currentBannerData || existingBanner
 const posterToSave = currentOriginalPosterData || existingPoster || null;
 const f={t:v('title'),cat:v('cat'),club:v('club'),d:d.getDate(),s:v('s'),e:v('e'),room:v('room'),desc:v('desc'),banner:bannerToSave,poster:posterToSave};
 if(currentBannerApplied && currentBannerBlob){f.bannerBlob=currentBannerBlob;}
-if(st.edit){Object.assign(E.find(x=>x.id===st.edit),f);st.edit=null;currentBannerData=null;currentBannerBlob=null;currentOriginalPosterData=null;saveCustomEvents();toast('Event updated'+(bannerToSave?' with 1200×400 banner':''))}else{const e={id:Date.now(),...f};E.push(e);st.mine.add(e.id);currentBannerData=null;currentBannerBlob=null;currentOriginalPosterData=null;saveCustomEvents();toast('Published. Live on Home and Calendar'+(bannerToSave?' with 1200×400 banner.':''))}
+if(st.edit){Object.assign(E.find(x=>x.id===st.edit),f);st.edit=null;currentPosterImage=null;currentBannerData=null;currentBannerBlob=null;currentOriginalPosterData=null;saveCustomEvents();toast('Event updated'+(bannerToSave?' with 16:9 banner':''))}else{const e={id:Date.now(),...f};E.push(e);st.mine.add(e.id);currentPosterImage=null;currentBannerData=null;currentBannerBlob=null;currentOriginalPosterData=null;saveCustomEvents();toast('Published. Live on Home and Calendar'+(bannerToSave?' with 16:9 banner.':''))}
 st.view='my';render()}
 document.addEventListener('click',ev=>{const t=ev.target.closest('[data-ed],[data-cx],[data-md],[data-v],[data-f],[data-n],[data-d],[data-cv],[data-id],[data-go],[data-x],[data-sh],[data-del],[data-pe],#out,#out2,#col,#cb,#ab,#btn-apply-banner,#btn-keep-original,#poster-dropzone,.modal');
 if(!ev.target.closest('.av'))$('#dd').classList.remove('open');if(!t)return;const D=t.dataset;
 if(t.id==='ab')return $('#dd').classList.toggle('open');
-if(t.id==='btn-apply-banner'){currentBannerApplied=true;updateBannerChoiceUI();return toast('✓ 1200×400 banner applied')}
+if(t.id==='btn-apply-banner'){currentBannerApplied=true;updateBannerChoiceUI();return toast('✓ 16:9 banner applied')}
 if(t.id==='btn-keep-original'){currentBannerApplied=false;updateBannerChoiceUI();return toast('Original poster will be kept')}
 if(t.id==='poster-dropzone'||t.closest('#poster-dropzone')){if(ev.target.id!=='poster')$('#poster').click();return}
 if(t.classList.contains('modal')&&ev.target===t)return close();
@@ -476,8 +707,8 @@ if(D.del){E=E.filter(e=>e.id!==+D.del);st.mine.delete(+D.del);st.rem.delete(+D.d
 if(D.pe!==undefined){const id=Date.now();E.push({id,t:'My study block',cat:'pe',club:'Personal',d:st.sel,s:'19:00',e:'21:00',room:'Library',desc:'Only you can see this.'});toast('Personal event added. Only you can see it');return render()}
 if(D.md){st.sel=+D.md;st.view='cal';st.cal='month';return render()}
 if(D.ed){st.edit=+D.ed;st.view='up';return render()}
-if(D.cx!==undefined){st.edit=null;currentBannerData=null;currentBannerBlob=null;currentOriginalPosterData=null;st.view='my';return render()}
-if(D.v){if(D.v==='up'){st.edit=null;currentBannerData=null;currentBannerBlob=null;currentOriginalPosterData=null;}st.view=D.v;return render()}
+if(D.cx!==undefined){st.edit=null;currentPosterImage=null;currentBannerData=null;currentBannerBlob=null;currentOriginalPosterData=null;st.view='my';return render()}
+if(D.v){if(D.v==='up'){st.edit=null;currentPosterImage=null;currentBannerData=null;currentBannerBlob=null;currentOriginalPosterData=null;}st.view=D.v;return render()}
 if(D.go){if(D.go==='grid'){st.view='home';render();return $('#grid').scrollIntoView({behavior:'smooth'})}st.view=D.go;return render()}
 if(D.f){st.f.has(D.f)?st.f.delete(D.f):st.f.add(D.f);return render()}
 if(D.d){st.sel=+D.d;return render()}
@@ -490,7 +721,13 @@ if(t.id==='out'||t.id==='out2')return toast('Demo: logging out would end your se
 document.addEventListener('dragover',ev=>{const dz=ev.target.closest('#poster-dropzone');if(dz){ev.preventDefault();dz.style.borderColor='var(--p)';dz.style.background='var(--hover)'}});
 document.addEventListener('dragleave',ev=>{const dz=ev.target.closest('#poster-dropzone');if(dz&&!dz.contains(ev.relatedTarget)){dz.style.borderColor='var(--bd)';dz.style.background='var(--card)'}});
 document.addEventListener('drop',async ev=>{const dz=ev.target.closest('#poster-dropzone');if(dz){ev.preventDefault();dz.style.borderColor='var(--bd)';dz.style.background='var(--card)';if(ev.dataTransfer&&ev.dataTransfer.files&&ev.dataTransfer.files[0]){await handlePosterUpload(ev.dataTransfer.files[0])}}});
-document.addEventListener('change',async ev=>{if(ev.target&&ev.target.id==='poster'&&ev.target.files&&ev.target.files[0]){await handlePosterUpload(ev.target.files[0])}});
+document.addEventListener('change',async ev=>{
+  if(ev.target&&ev.target.id==='poster'&&ev.target.files&&ev.target.files[0]){await handlePosterUpload(ev.target.files[0])}
+  if(ev.target&&['cat','date'].includes(ev.target.id)){scheduleBannerRefresh()}
+});
+document.addEventListener('input',ev=>{
+  if(ev.target&&['title','club','desc','room','s','e','date','cat'].includes(ev.target.id)){scheduleBannerRefresh()}
+});
 document.addEventListener('submit',ev=>{ev.preventDefault();submit()});
 document.addEventListener('keydown',ev=>{if(ev.key==='Escape')close()});
 $('#q').addEventListener('input',e=>{st.q=e.target.value.trim().toLowerCase();if(!['home','cal'].includes(st.view))st.view='home';const f=document.activeElement;render();})
