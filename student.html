@@ -174,6 +174,13 @@ let E=[
 {id:6,t:'Inter-hostel Football',cat:'cl',club:'Sports Council',d:14,s:'15:30',e:'18:00',room:'Main ground',desc:'Group stage matches. Come support your hostel.'},
 {id:7,t:'Photography Walk',cat:'cl',club:'Lens Club',d:19,s:'07:00',e:'09:30',room:'Meet at main gate',desc:'Golden hour walk around the campus and nearby fields. Any camera or phone works.'},
 {id:8,t:'Annual Cultural Evening',cat:'ru',club:'Cultural Committee',d:27,s:'18:00',e:'22:00',room:'Open-air stage',desc:'Dance, music and theatre performances from every department.'}];
+try{
+  const saved=localStorage.getItem('evento_published_events');
+  if(saved){
+    const arr=JSON.parse(saved);
+    if(Array.isArray(arr)&&arr.length)E=arr;
+  }
+}catch(e){}
 let st={role:'s',view:'home',f:new Set(['ru','nw','cl','pe']),rem:new Set([2,4]),sel:2,cal:'month',q:'',mine:new Set(),email:null,gate:0};
 const $=s=>document.querySelector(s);
 const ic={home:'<path d="M3 11l9-8 9 8M5 10v10h14V10"/>',cal:'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>',up:'<path d="M12 16V4M7 9l5-5 5 5M4 20h16"/>',rem:'<path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/>',pin:'<path d="M12 21s7-6 7-11a7 7 0 10-14 0c0 5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',clk:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',cal2:'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18"/>'};
@@ -190,7 +197,7 @@ function nav(){const o=st.role==='o';const items=[['home','Home','home'],['cal',
 $('#nav').innerHTML=items.map(([k,l,i])=>`<button class="nav ${st.view===k?'on':''}" data-v="${k}">${I(i)}<span class="lb">${l}</span>${k==='rem'&&st.rem.size?`<span class="n lb">${st.rem.size}</span>`:''}</button>`).join('');
 $('#rl').textContent=o?'Organizer':'Student';$('#dotb').style.display=st.rem.size?'block':'none'}
 function card(e){const c=CAT[e.cat],on=st.rem.has(e.id);
-return `<article class="ev" data-id="${e.id}"><div class="post" style="background:${c.h}"><span class="tag"><i class="dot" style="background:${c.h}"></i>${c.n}</span><div class="t">${e.t}</div></div>
+return `<article class="ev" data-id="${e.id}"><div class="post" style="background:${c.h};position:relative;overflow:hidden">${e.banner?`<img src="${e.banner}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0"><div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0.15) 0%,rgba(0,0,0,0.6) 100%);z-index:1;pointer-events:none"></div>`:''}<span class="tag" style="z-index:2"><i class="dot" style="background:${c.h}"></i>${c.n}</span><div class="t" style="z-index:2">${e.t}</div></div>
 <div class="eb"><div class="cl"><span class="logo" style="background:${c.h}">${ini(e.club)}</span>${e.club}</div><h3>${e.t}</h3><p>${e.desc}</p>
 <div class="meta"><span>${I('pin')}${e.room}</span><span>${I('clk')}${fd(e)}, ${e.s}</span></div>
 <button class="btn sm ${on?'on':''}" data-n="${e.id}">${I('rem')}${on?'Reminder set':'Notify me'}</button></div></article>`}
@@ -222,7 +229,7 @@ function rem(){const l=E.filter(e=>st.rem.has(e.id)).sort((a,b)=>dt(a)-dt(b));
 return `<div class="page"><h1 style="font-size:28px;margin-bottom:6px">My reminders</h1><p class="mut" style="margin-bottom:18px">You get a reminder before each of these starts.</p>${l.length?`<div class="grid">${l.map(card).join('')}</div>`:'<div class="empty">No reminders yet. Tap Notify on any event to add one.</div>'}</div>`}
 function render(){nav();$('#v').innerHTML={home,cal:calv,rem}[st.view==='grid'?'home':st.view]();const ch=render.lv!==st.view;render.lv=st.view;if(ch){const p=$('#v .page');p&&p.classList.add('enter')}window.scrollTo(0,ch?0:window.scrollY)}
 function open(id){const e=E.find(x=>x.id===id),c=CAT[e.cat],on=st.rem.has(id),own=st.mine.has(id);
-$('#sh').innerHTML=`<div class="post" style="background:${c.h}"><span class="tag"><i class="dot" style="background:${c.h}"></i>${c.n}</span><div class="t" style="font-size:30px">${e.t}</div><button class="x" data-x aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+$('#sh').innerHTML=`<div class="post" style="background:${c.h};position:relative;overflow:hidden">${e.banner?`<img src="${e.banner}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0"><div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0.15) 0%,rgba(0,0,0,0.6) 100%);z-index:1;pointer-events:none"></div>`:''}<span class="tag" style="z-index:2"><i class="dot" style="background:${c.h}"></i>${c.n}</span><div class="t" style="font-size:30px;z-index:2">${e.t}</div><button class="x" data-x aria-label="Close" style="z-index:3"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
 <div class="sb"><div class="cl"><span class="logo" style="background:${c.h}">${ini(e.club)}</span>${e.club}</div><p>${e.desc}</p>
 <div class="meta" style="font-size:14px"><span>${I('cal2')}${fd(e)}</span><span>${I('clk')}${ft(e)}</span><span>${I('pin')}${e.room}</span></div>
 <div class="row" style="margin:0"><button class="btn ${on?'on':'p'}" data-n="${e.id}">${I('rem')}${on?'Reminder set. Tap to cancel':'Notify me'}</button><button class="btn" data-sh="${e.id}">Copy link</button>${own?`<button class="btn" data-del="${e.id}" style="color:var(--er)">Delete event</button>`:''}</div></div>`;
